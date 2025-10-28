@@ -1,0 +1,338 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="color-scheme" content="dark" />
+<title>Ciche Wzgórze — Dom Cieni (Wersja finalna)</title>
+<link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --bg-color:#000; --text-color:#e2e8f0; --border-color:#44403c;
+    --panel-bg:rgba(12,10,9,0.88); --choice-bg:rgba(41,37,36,0.86);
+    --choice-hover-bg:#c7a26d; --name-narrator:#c7a26d;
+    --name-sara:#a7c7c8; --name-karo:#bda2d9; --name-monika:#d9a2a2;
+  }
+  *{box-sizing:border-box;}
+  html,body{height:100%;margin:0;background:#000;color:var(--text-color);font-family:'Lora',serif;overflow:hidden;}
+  #game-world{position:relative;width:100%;height:100%;}
+  .layer{position:absolute;inset:0}
+
+  #bg-stack{isolation:isolate}
+  .bg{position:absolute;inset:0;background-size:cover;background-position:center;opacity:0;transition:opacity .8s ease-in-out;filter:brightness(.75);} 
+  .bg.visible{opacity:1}
+
+  #ui-layer{display:flex;flex-direction:column;justify-content:flex-end;align-items:center;padding:20px;pointer-events:none}
+  #text-box{width:100%;max-width:920px;min-height:200px;background:var(--panel-bg);border:1px solid var(--border-color);border-radius:10px;padding:22px 26px;backdrop-filter:blur(3px);margin-bottom:16px;pointer-events:auto}
+  #speaker-name{font-weight:700;font-size:1.05rem;display:block;margin-bottom:10px;color:var(--name-narrator)}
+  #dialogue-text{line-height:1.75;font-size:1.12rem}
+
+  #choices-box{width:100%;max-width:920px;display:flex;flex-direction:column;gap:10px;pointer-events:auto;margin-bottom:10px}
+  .choice-btn{background:var(--choice-bg);border:1px solid var(--border-color);color:var(--text-color);font-size:1.05rem;padding:14px 18px;text-align:left;cursor:pointer;border-radius:8px;transition:all .18s;opacity:0;transform:translateY(8px);animation:choiceIn .3s forwards}
+  .choice-btn:hover{background:var(--choice-hover-bg);color:#000;border-color:var(--choice-hover-bg)}
+  .choice-btn:focus-visible{outline:2px solid var(--choice-hover-bg);outline-offset:2px}
+  @keyframes choiceIn{to{opacity:1;transform:translateY(0)}}
+
+  #final-choice{display:none;position:absolute;bottom:36px;left:50%;transform:translateX(-50%);z-index:50;pointer-events:auto}
+  #final-choice .choice-btn{opacity:1;transform:none}
+  
+  /* Overlays */
+  .overlay{position:fixed;inset:0;background:rgba(0,0,0,.85);display:none;align-items:center;justify-content:center;z-index:100; cursor:pointer;}
+  .overlay.visible{display:flex}
+  .document{width:min(90vw,680px);max-height:90vh;background-image:url('images/papier.png');background-color:#e5ded1;color:#333;padding:28px 36px;border:1px solid #777;box-shadow:0 0 30px #000;overflow-y:auto;font-family:'Times New Roman',serif; cursor:default;}
+  .document h2{text-align:center;font-size:1.3rem;border-bottom:1px solid #aaa;padding-bottom:10px;margin-bottom:12px}
+  .document p{line-height:1.8;font-size:1.05rem;text-align:justify; margin: 1em 0; white-space: pre-wrap;}
+  .photo-container{width:min(90vw, 450px); padding:10px; background:#111; border: 2px solid #333;}
+  .photo-container img { width: 100%; display: block; }
+</style>
+</head>
+<body>
+  <div id="game-world">
+    <div id="bg-stack" class="layer" aria-hidden="true">
+      <div class="bg visible" id="bgA" style="background-image:url('images/sierociniec_zewnatrz.png')"></div>
+      <div class="bg" id="bgB"></div>
+    </div>
+
+    <div id="ui-layer" class="layer">
+      <div id="text-box">
+        <span id="speaker-name">...</span>
+        <p id="dialogue-text" aria-live="polite"></p>
+      </div>
+      <div id="choices-box"></div>
+      <div id="final-choice">
+        <button class="choice-btn" type="button" onclick="location.href='piwnica.html'">Zejdźcie do piwnicy</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="notebook-overlay" class="overlay">
+    <div class="document">
+      <h2>Fragmenty z notatnika Pana Marka</h2>
+      <p><b>Wpis 1:</b><br>„Kolejna dziwna noc. Znowu słychać te dźwięki w ścianach. Dzieci się boją, skarżą się na złe sny. Mówią o cieniach w lesie. Coś obserwuje ten dom, czuję to.”</p>
+      <p><b>Wpis 2:</b><br>„Zosia znowu mówiła o swoim ‘przyjacielu’ z lasu. Pozostałe dzieci zaczynają się jej bać. Izolują ją. Martwię się o nią. Nikt mnie nie słucha, dyrektorka uważa, że to tylko dziecięce fantazje.”</p>
+      <p><b>Wpis 3 (Ostatni):</b><br>„Muszę to zgłosić. Anonimowo. Zniknięcia w okolicy, dziwne zachowanie dyrektorki, to, co dzieje się w nocy. Coś tu jest fundamentalnie nie tak, jak powinno.”</p>
+    </div>
+  </div>
+
+  <div id="photo-overlay" class="overlay">
+    <div class="photo-container">
+        <img src="images/zdjecie_zamazane.jpg" alt="Stare zdjęcie grupowe dzieci z sierocińca, twarz opiekuna jest zamazana.">
+    </div>
+  </div>
+
+  <div id="note-overlay" class="overlay">
+    <div class="document" style="width: auto; text-align: center;">
+      <p style="font-size: 1.5em; font-style: italic;">„Odpowiedź leży w piwnicy”</p>
+    </div>
+  </div>
+
+  <audio id="music" loop preload="auto"><source src="audio/muzyka_tlo_sierociniec.mp3" type="audio/mpeg"></audio>
+  <audio id="sfx-whisper3" preload="auto"><source src="audio/pomozcie.mp3"></audio>
+  <audio id="sfx-door-slam" preload="auto"><source src="audio/drzwi.mp3"></audio>
+  <audio id="sfx-creak2" preload="auto"><source src="audio/drzwi.mp3"></audio>
+  <audio id="sfx-unlock" preload="auto"><source src="audio/box-open.mp3"></audio>
+
+
+<script>
+/* ===== DOM & ZMIENNE ===== */
+const dialogueTextEl = document.getElementById('dialogue-text');
+const speakerEl = document.getElementById('speaker-name');
+const choicesBoxEl = document.getElementById('choices-box');
+const finalChoice = document.getElementById('final-choice');
+const gameWorld = document.getElementById('game-world');
+const bgA = document.getElementById('bgA');
+const bgB = document.getElementById('bgB');
+
+const NAME_COLOR = {
+  '…': 'var(--name-narrator)', 'Sara': 'var(--name-sara)', 'Karo': 'var(--name-karo)', 'Monika': 'var(--name-monika)'
+};
+let musicStarted = false;
+
+/* ===== AUDIO & TŁO ===== */
+function startMusicIfNeeded(){
+  if(!musicStarted){
+    const m = document.getElementById('music');
+    if(m) try{ m.volume=0.5; m.play(); } catch(e){}
+    musicStarted = true;
+  }
+}
+function sfx(id, vol=1){
+  const a = document.getElementById(id);
+  if(a) try{ a.currentTime=0; a.volume=vol; a.play(); } catch(e){}
+}
+document.addEventListener('pointerdown', startMusicIfNeeded, { once:true });
+
+let activeBg = 'A';
+function changeBackground(fileName){
+  const next = activeBg === 'A' ? bgB : bgA;
+  const cur  = activeBg === 'A' ? bgA : bgB;
+  const url = `url('images/${fileName}')`;
+  if(next.style.backgroundImage === url && next.classList.contains('visible')) return;
+  next.style.backgroundImage = url;
+  const img = new Image();
+  img.onload = ()=>{ cur.classList.remove('visible'); next.classList.add('visible'); activeBg = activeBg==='A' ? 'B' : 'A'; };
+  img.src = `images/${fileName}`;
+}
+
+/* ===== OVERLAYS ===== */
+const overlays = document.querySelectorAll('.overlay');
+function showOverlay(id) {
+  const overlay = document.getElementById(id);
+  if (overlay) overlay.classList.add('visible');
+}
+function hideOverlays() {
+  overlays.forEach(o => o.classList.remove('visible'));
+}
+overlays.forEach(o => o.addEventListener('click', hideOverlays));
+document.querySelectorAll('.document, .photo-container').forEach(el => el.addEventListener('click', e => e.stopPropagation()));
+document.addEventListener('keydown', e => { if (e.key === 'Escape') hideOverlays(); });
+
+/* ===== SILNIK GRY ===== */
+function showDialogue(speaker, text, color='var(--name-narrator)'){
+  speakerEl.textContent = speaker || '…';
+  speakerEl.style.color = color;
+  dialogueTextEl.innerHTML = text || '';
+}
+
+/* ===== WYBORY ===== */
+function showChoices(getChoices){
+  choicesBoxEl.innerHTML = '';
+  const list = typeof getChoices === 'function' ? getChoices() : getChoices;
+
+  const visible = list.filter(c => {
+    const isDisabled = typeof c.disabled === 'function' ? c.disabled() : !!c.disabled;
+    return !isDisabled;
+  });
+
+  visible.forEach((c,i)=>{
+    const b = document.createElement('button');
+    b.className='choice-btn';
+    b.type='button';
+    b.textContent=c.text;
+    b.style.animationDelay=`${i*70}ms`;
+    b.addEventListener('click', ()=> {
+      const beforeIdx = idx;
+      if (typeof c.action === 'function') c.action();
+      if (idx === beforeIdx) {
+        showChoices(getChoices);
+      }
+    });
+    choicesBoxEl.appendChild(b);
+  });
+}
+
+/* ===== ETYKIETY/GOTO (POPRAWKA) ===== */
+const LABEL = {};
+function label(id){ return { label:true, id }; }
+function goto(id){ if(LABEL[id] != null){ idx = LABEL[id]; renderStep(); } }
+
+let idx = 0;
+
+/* ===== FABUŁA ===== */
+const hallExploration = { doll: false, photos: false };
+const overseerRoom = { notebook: false, photo: false };
+const directorRoom = { key: false, note: false };
+
+const story = [
+  // 1. Podejście
+  { s:'…', t:'Wyszliście na otwartą przestrzeń. Sierociniec wyłonił się z mgły niczym szkielet prehistorycznego potwora, zapomniany przez czas i ludzi.'},
+  { s:'…', t:'Puste oczodoły okien miejscami zabito chaotycznie deskami, jakby ktoś w panice próbował powstrzymać coś przed wydostaniem się na zewnątrz. Widoczne były jeszcze skutki pożaru, ale zdecydowanie mniejsze, niż można się było spodziewać.' },
+  { s:'…', t:'Gdy staliśmy tak w milczeniu, z wnętrza budynku dobiegł cichy, przeciągły odgłos skrzypiących desek.', action:()=>sfx('sfx-creak2', 0.6)},
+  { s:'Monika', t:'Słyszeliście to? Tam ktoś jest.' },
+  { s:'Sara', t:'Nikogo tam nie ma. To tylko wiatr.' },
+  { s:'Karo', t:'Nie, to nie był wiatr.' },
+  { s:'…', t:'Skrzypienie powtórzyło się, tym razem głośniej, bliżej. Brzmiało jak krok na schodach. Potem kolejny.', action:()=>sfx('sfx-creak2', 0.8) },
+  { s:'Monika', t:'Mam dość! Nie wejdę tam! Wracam do lasu, wolę zginąć tam niż w tej przeklętej ruderze!' },
+  { s:'Sara', t:'I co dalej, Monia? Będziesz biegać po lesie, sama?' },
+  { s:'…', t:'Ona nas tu wezwała. Prawda jest w środku. Odpowiedź jest w tych murach.' },
+  { s:'Sara', t:'Nie mamy wyboru. To musi się skończyć. Dziś w nocy.' },
+  { s:'…', t:'Z wnętrza powiał chłodny, stęchły prąd powietrza, niosąc ze sobą szept, który tym razem usłyszeliśmy wszyscy.', action:()=>sfx('sfx-whisper3', 0.9) },
+  { s:'…', t:'Cichy, żałosny, dziecięcy szept, który zdawał się formować jedno słowo: <i>„Pomóżcie…”</i>' },
+  { type:'choice', prompt:'', choices:()=>[
+      { text: '[Wejdźcie do środka]', action:()=>goto('hall_entry') }
+    ]},
+
+  // 2. Główna sala
+  label('hall_entry'),
+  { bg:'sierociniec_hol.jpg', s:'…', t:'Gdy tylko przekroczyliśmy próg, stare drzwi zamknęły się za nami z głuchym łoskotem, odcinając nas od świata zewnętrznego.', action:()=>sfx('sfx-door-slam', 0.7) },
+  { s:'…', t:'Byliśmy w głównej sali – ogromnym, ponurym pomieszczeniu, które kiedyś było sercem sierocińca, a teraz przypominało upiorne mauzoleum.' },
+  { s:'Monika', t:'Boże, nic się nie zmieniło…' },
+
+  label('hallMenu'),
+  { type:'choice', prompt:'Rozglądacie się po sali. Waszą uwagę przykuwa coś na podłodze i rząd starych fotografii na ścianie.', choices:()=>[
+      { text: 'Zbadaj szmacianą lalkę', action:()=>{ hallExploration.doll=true; goto('hall_doll'); }, disabled: ()=>hallExploration.doll },
+      { text: 'Obejrzyj fotografie', action:()=>{ hallExploration.photos=true; goto('hall_photos'); }, disabled: ()=>hallExploration.photos },
+      { text: 'Idźcie dalej korytarzem', action:()=>goto('to_overseer'), disabled: ()=>!(hallExploration.doll && hallExploration.photos) }
+    ]},
+
+  label('hall_doll'),
+  { s:'…', t:'Na podłodze leżała stara, szmaciana lalka, rozdarta, z jednym szklanym okiem wpatrującym się w was z niemym przerażeniem.' },
+  { s:'Karo', t:'Pamiętam ją.', action:()=>goto('hallMenu') },
+
+  label('hall_photos'),
+  { s:'…', t:'Na ścianie wisi rząd zniszczonych, pożółkłych fotografii. Plamy wilgoci rozmyły niektóre twarze, a radosne, dziecięce uśmiechy wyglądają jak upiorne grymasy.' },
+  { s:'…', t:'Czujecie na sobie ich nieme, osądzające spojrzenia.', action:()=>goto('hallMenu') },
+
+  label('to_overseer'),
+  { bg:'pokoj_opiekuna.jpg', s:'…', t:'Ruszyliście w głąb korytarza. Na jego końcu, za uchylonymi drzwiami, znajdował się pokój jednego z opiekunów.' },
+  { s:'…', t:'Wnętrze było w stanie kompletnego chaosu. Papiery i książki leżały porozrzucane po całej podłodze, jakby ktoś opuścił to miejsce w wielkim pośpiechu.' },
+
+  label('overseerMenu'),
+  { type:'choice', prompt:'Przeszukujecie zniszczony pokój.', choices:()=>[
+      { text: 'Przeczytaj notatnik z biurka', action:()=>{ overseerRoom.notebook=true; showOverlay('notebook-overlay'); }, disabled: ()=>overseerRoom.notebook },
+      { text: 'Sprawdź szufladę', action:()=>{ overseerRoom.photo=true; showOverlay('photo-overlay'); goto('photo_desc'); }, disabled: ()=>overseerRoom.photo },
+      { text: 'Opuść pokój', action:()=>goto('corridor_after_overseer'), disabled: ()=>!(overseerRoom.notebook && overseerRoom.photo) }
+    ]},
+
+  label('photo_desc'),
+  { s:'…', t:'W szufladzie, pod stertą starych rachunków, znajdujecie pożółkłą fotografię. Przedstawia uśmiechniętego mężczyznę w średnim wieku, pozującego z grupą dzieci na tle sierocińca.'},
+  { s:'Karo', t:'Czekajcie... Ja go znam. To on.' },
+  { s:'Monika', t:'Kto?' },
+  { s:'Karo', t:'Ten człowiek ze stacji benzynowej. Ten, który się zastrzelił. Dużo starszy, ale to on.' },
+  { s:'…', t:'Lodowaty dreszcz przebiegł wam po plecach. Związek między tym miejscem a niedawną tragedią stał się przerażająco jasny.', action:()=>goto('overseerMenu') },
+
+  label('corridor_after_overseer'),
+  { s:'…', t:'Wstrząśnięci odkryciami, opuściliście pokój. Korytarz prowadził w głąb budynku, w część, do której rzadko mieliście dostęp.' },
+  { bg:'drzwi_piwnicy.png', s:'…', t:'I tam ją zobaczyliście. Na końcu ciemnego przejścia znajdowały się solidne, metalowe drzwi, pokryte grubą warstwą rdzy.' },
+  { s:'…', t:'Cała ich powierzchnia była pokryta wydrapanymi, dziecięcymi rysunkami: patykowate postacie uciekające przed wysokim cieniem, dzieci wpadające do czarnych dziur i twarze wykrzywione w niemym krzyku.' },
+  { s:'…', t:'Wiedzieliście, że stoicie przed wejściem do samego serca tego koszmaru.' },
+
+  // 4. Gabinet dyrektorki i klucz
+  { s:'Sara', t:'Klucz... Dyrektorka miała klucz. Jej gabinet. To jedyne logiczne miejsce.' },
+  { bg:'gabinet_dyrektorki.jpg', s:'…', t:'Wnętrze gabinetu Marii S. było zadziwiająco uporządkowane, choć pokryte grubą warstwą kurzu.' },
+  { s:'Karo', t:'Tutaj. Coś jest za obrazem.', action: ()=> sfx('sfx-creak2', 0.5) },
+  { s:'…', t:'Gdy Sara zdjęła obraz ze ściany, waszym oczom ukazał się wmurowany, zardzewiały sejf.' },
+  
+  label('director_office'),
+  { type:'choice', prompt:'Sejf jest zamknięty. Musicie znaleźć sposób, żeby go otworzyć.', choices:()=>[
+      { text: 'Przeszukaj biurko', action:()=>{ directorRoom.key=true; goto('key_discovery_sequence'); }, disabled: ()=>directorRoom.key }
+    ]},
+
+  label('key_discovery_sequence'),
+  { s:'…', t:'W ostatniej szufladzie biurka, pod stertą dokumentów, znajdujesz stary, ciężki, zardzewiały klucz i małą, złożoną kartkę papieru.', action:()=>showOverlay('note-overlay') },
+  { s:'Monika', t:'Świetnie, mamy go! Spróbujmy otworzyć sejf.' },
+  { s:'…', t:'Sara podchodzi do sejfu i wkłada klucz do zamka. Próbuje go przekręcić, ale ten nawet nie drgnie. Kształt klucza zupełnie nie pasuje do mechanizmu.'},
+  { s:'Sara', t:'Cholera, to nie ten klucz.' },
+  { s:'Karo', t:'Zaraz, a ta notatka? „Odpowiedź leży w piwnicy”.'},
+  { s:'…', t:'Spojrzeliście po sobie. Wszystko stało się jasne. To nie był klucz do sejfu.'},
+
+  label('back_to_door'),
+  { bg:'drzwi_piwnicy.jpg', s:'Sara', t:'„Odpowiedź leży w piwnicy”. Ten klucz nie jest do sejfu. Jest do tych drzwi.' },
+  { s:'…', t:'Powrót do drzwi zdawał się najdłuższym spacerem w waszym życiu. Klucz w twojej dłoni zdawał się ciążyć jak kamień nagrobny.' },
+  { s:'…', t:'Sara wsunęła go do zamka. Dźwięk przekręcanego metalu rozdarł ciszę niczym zgrzyt łamanych kości.', action:()=>sfx('sfx-unlock', 0.8) },
+  { end:true }
+];
+
+/* ===== BUDOWANIE MAPY ETYKIET (KLUCZOWA POPRAWKA) ===== */
+for (let i = 0; i < story.length; i++) {
+  const s = story[i];
+  if (s && s.label) LABEL[s.id] = i;
+}
+
+/* ===== RENDEROWANIE KROKU ===== */
+function renderStep(){
+  let s = story[idx];
+
+  // pomijaj "markerowe" obiekty etykiet
+  while (s && s.label) {
+    idx++;
+    s = story[idx];
+  }
+  if (!s) return;
+
+  choicesBoxEl.innerHTML = '';
+
+  if(s.bg) changeBackground(s.bg);
+  if(s.action) s.action();
+
+  if(s.type === 'choice'){
+    showDialogue('…', s.prompt || 'Co robicie?');
+    showChoices(s.choices);
+    return;
+  }
+  if(s.end){
+    showDialogue('…', 'W czarnej otchłani prowadzą w dół kamienne, strome schody. Czas stawić czoła temu, co czeka na dole.');
+    finalChoice.style.display = 'block';
+    return;
+  }
+  
+  const speaker = s.s || '…';
+  const color = NAME_COLOR[speaker] || 'var(--name-narrator)';
+  showDialogue(speaker, s.t, color);
+}
+
+function nextStep(){
+  if(choicesBoxEl.childElementCount > 0 || Array.from(overlays).some(o => o.classList.contains('visible'))) return;
+  if(idx < story.length-1){ idx++; renderStep(); }
+}
+
+gameWorld.addEventListener('click', (e)=>{
+  if (e.target.closest('.choice-btn')) return;
+  nextStep();
+});
+
+/* ===== START ===== */
+renderStep();
+</script>
+</body>
+</html>

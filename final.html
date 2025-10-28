@@ -1,0 +1,275 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="color-scheme" content="dark" />
+<title>Ciche Wzgórze — Prawdziwe Potwory</title>
+<link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --bg-color:#000; --text-color:#e2e8f0; --border-color:#44403c;
+    --panel-bg:rgba(12,10,9,0.88); --choice-bg:rgba(41,37,36,0.86);
+    --choice-hover-bg:#c7a26d; --name-narrator:#c7a26d;
+    --name-sara:#a7c7c8; --name-karo:#bda2d9; --name-monika:#d9a2a2;
+  }
+  *{box-sizing:border-box;}
+  html,body{height:100%;margin:0;background:#000;color:var(--text-color);font-family:'Lora',serif;overflow:hidden;}
+  #game-world{position:relative;width:100%;height:100%;cursor:pointer;}
+
+  .layer{position:absolute;inset:0}
+
+  #bg-stack{isolation:isolate}
+  .bg{position:absolute;inset:0;background-size:cover;background-position:center;opacity:0;transition:opacity .8s ease-in-out;filter:brightness(.7);}
+  .bg.visible{opacity:1}
+  
+  #fx-layer { transition: background-color 0.1s ease-in-out, opacity 0.3s ease; pointer-events: none;}
+
+  #ui-layer{display:flex;flex-direction:column;justify-content:flex-end;align-items:center;padding:20px;pointer-events:none; transition: opacity 0.5s ease-in-out;}
+  #text-box{width:100%;max-width:920px;min-height:200px;background:var(--panel-bg);border:1px solid var(--border-color);border-radius:10px;padding:22px 26px;backdrop-filter:blur(3px);margin-bottom:16px;pointer-events:auto}
+  #text-box:focus{outline:2px solid var(--border-color);outline-offset:4px}
+  #speaker-name{font-weight:700;font-size:1.05rem;display:block;margin-bottom:10px;color:var(--name-narrator)}
+  #dialogue-text{line-height:1.75;font-size:1.12rem}
+
+  #final-choice{display:none;position:absolute;inset:0;background:rgba(0,0,0,0.95);z-index:50;pointer-events:auto; flex-direction:column;align-items:center;justify-content:center;}
+  .final-btn{background:transparent;border:1px solid var(--border-color);color:var(--text-color);font-family:'Lora',serif;font-size:1.5em;padding:15px 30px;cursor:pointer;border-radius:5px;transition:all .2s;}
+  .final-btn:hover{background:var(--name-narrator);color:black;}
+
+  @media (prefers-reduced-motion: reduce) {
+    .bg { transition: none; }
+    #ui-layer { transition: none; }
+    #fx-layer { transition: none; }
+  }
+</style>
+</head>
+<body>
+  <div id="game-world">
+    <div id="bg-stack" class="layer" aria-hidden="true">
+      <div class="bg visible" id="bgA" style="background-image:url('images/gabinet_dyrektorki.jpg')"></div>
+      <div class="bg" id="bgB"></div>
+    </div>
+    <div id="fx-layer" class="layer"></div>
+
+    <div id="ui-layer" class="layer">
+      <div id="text-box" tabindex="0">
+        <span id="speaker-name">...</span>
+        <p id="dialogue-text" role="status" aria-live="polite"></p>
+      </div>
+    </div>
+    
+    <div id="final-choice" class="layer">
+      <button class="final-btn" type="button" onclick="location.href='wieczny_koszmar.html'">[ Przebudź się ]</button>
+    </div>
+  </div>
+
+  <audio id="music" loop preload="auto"><source src="audio/muzyka_tlo_sierociniec.mp3" type="audio/mpeg"></audio>
+  <audio id="sfx-safe-open" preload="auto"><source src="audio/box-open.mp3"></audio>
+  
+  <audio id="sfx-heartbeat-fast" loop preload="auto"><source src="audio/serce.mp3"></audio>
+  <audio id="sfx-flashback-hit" preload="auto"><source src="audio/wspomnienie_cios.mp3"></audio>
+  <audio id="sfx-flashback-scream" preload="auto"><source src="audio/wspomnienie_krzyk.mp3"></audio>
+
+<script>
+/* ===== DOM & ZMIENNE ===== */
+const dialogueTextEl = document.getElementById('dialogue-text');
+const speakerEl = document.getElementById('speaker-name');
+const finalChoice = document.getElementById('final-choice');
+const gameWorld = document.getElementById('game-world');
+const uiLayer = document.getElementById('ui-layer');
+const bgA = document.getElementById('bgA');
+const bgB = document.getElementById('bgB');
+const fxLayer = document.getElementById('fx-layer');
+
+const NAME_COLOR = {
+  'Sara': 'var(--name-sara)', 'Karo': 'var(--name-karo)', 'Monika': 'var(--name-monika)'
+};
+let musicStarted = false;
+let isBusy = false;
+
+/* ===== AUDIO & EFEKTY ===== */
+async function startMusicIfNeeded(){
+  if (musicStarted) return;
+  const m = document.getElementById('music');
+  if (!m) return;
+  try{
+    m.volume = 0.6;
+    await m.play();
+    musicStarted = true;
+  }catch(e){
+    // wymaga gestu użytkownika — spróbujemy ponownie przy następnym kliknięciu
+  }
+}
+document.addEventListener('pointerdown', startMusicIfNeeded, { once:false });
+
+function sfx(id, vol=1){
+  const a = document.getElementById(id);
+  if(a) try{ a.currentTime=0; a.volume=vol; a.play(); } catch(e){}
+}
+
+// ===================== ZMIANA NR 2: DODANIE FUNKCJI stopSfx() =====================
+function stopSfx(id) {
+  const a = document.getElementById(id);
+  if (a) {
+    a.pause();
+    a.currentTime = 0;
+  }
+}
+// ==============================================================================
+
+/* ===== TŁO & UI ===== */
+let activeBg = 'A';
+function changeBackground(fileName){
+  const next = activeBg === 'A' ? bgB : bgA;
+  const cur  = activeBg === 'A' ? bgA : bgB;
+  const src = `images/${fileName}`;
+  const url = `url('${src}')`;
+  if (next.style.backgroundImage === url && next.classList.contains('visible')) return;
+  const img = new Image();
+  img.onload = () => {
+    next.style.backgroundImage = url;
+    cur.classList.remove('visible');
+    next.classList.add('visible');
+    activeBg = activeBg === 'A' ? 'B' : 'A';
+  };
+  img.onerror = () => {
+    next.style.backgroundImage = url;
+    cur.classList.remove('visible');
+    next.classList.add('visible');
+    activeBg = activeBg === 'A' ? 'B' : 'A';
+  };
+  img.src = src;
+}
+
+function showDialogue(speaker, text){
+  const name = speaker || '…';
+  const color = NAME_COLOR[name] || 'var(--name-narrator)';
+  speakerEl.textContent = name;
+  speakerEl.style.color = color;
+  dialogueTextEl.innerHTML = text || '';
+}
+
+/* ===== PRELOAD OBRAZÓW ===== */
+const preloadImages = [
+  'gabinet_dyrektorki.jpg',
+  'polana_konfrontacja.jpg',
+  'dlonie_krew.jpg'
+];
+preloadImages.forEach(src => { const i = new Image(); i.src = `images/${src}`; });
+
+/* ===== SEKWENCJA WSPOMNIEŃ ===== */
+function triggerFlashback() {
+  isBusy = true;
+  uiLayer.style.opacity = '0';
+  sfx('sfx-heartbeat-fast', 0.8);
+  let delay = 0;
+
+  const flash = (bg, sound, text, duration) => {
+    setTimeout(() => {
+      if (bg) changeBackground(bg);
+      if (sound) sfx(sound, 1.0);
+      showDialogue(' ', `<i style="font-size: 1.5em; text-align: center; display: block;">${text}</i>`);
+      fxLayer.style.backgroundColor = 'rgba(255,255,255,0.7)';
+      setTimeout(() => fxLayer.style.backgroundColor = 'transparent', 150);
+    }, delay);
+    delay += duration;
+  };
+  
+  flash('polana_konfrontacja.jpg', null, 'Zimna, księżycowa noc...', 1500);
+  flash(null, 'sfx-flashback-scream', 'Pamiętam krzyk Sary: „Teraz!”', 1200);
+  flash(null, 'sfx-flashback-hit', 'Pamiętam tępy dźwięk, gdy mój własny kij uderzył w jej ramię.', 1500);
+  flash(null, 'sfx-flashback-hit', 'Widziałem, jak Monika uderza ją kamieniem, płacząc...', 1500);
+  flash('dlonie_krew.jpg', null, 'Poczułem na dłoniach coś ciepłego i lepkiego. Jej krew.', 2000);
+
+  setTimeout(() => {
+    // ===================== ZMIANA NR 3: ZATRZYMANIE DŹWIĘKU SERCA =====================
+    stopSfx('sfx-heartbeat-fast');
+    // ==============================================================================
+    
+    changeBackground('gabinet_dyrektorki.jpg');
+    uiLayer.style.opacity = '1';
+    isBusy = false;
+    jumpTo(idx + 1);
+  }, delay);
+}
+
+/* ===== SILNIK GRY ===== */
+let idx = 0;
+
+function renderStep(){
+  const s = story[idx];
+  if(!s) return;
+  if(s.bg) changeBackground(s.bg);
+  if(s.action) s.action();
+  if(s.end){
+    uiLayer.style.transition = 'opacity 2s ease-out';
+    uiLayer.style.opacity = '0';
+    setTimeout(() => {
+      finalChoice.style.display = 'flex';
+    }, 2000);
+    return;
+  }
+  const speaker = s.s || '…';
+  showDialogue(speaker, s.t);
+}
+
+function nextStep(){
+  if (isBusy) return;
+  if (idx < story.length - 1){
+    if (story[idx + 1] && story[idx + 1].type === 'flashback') {
+      idx++;
+      isBusy = true;
+      story[idx].action();
+    } else {
+      idx++;
+      renderStep();
+    }
+  }
+}
+
+function jumpTo(i){
+  idx = Math.max(0, Math.min(i, story.length - 1));
+  renderStep();
+}
+
+gameWorld.addEventListener('click', nextStep);
+document.addEventListener('keydown', (e) => {
+  if (isBusy) return;
+  if (e.code === 'Space' || e.code === 'Enter') {
+    e.preventDefault();
+    nextStep();
+  }
+});
+
+/* ===== FABUŁA ===== */
+const story = [
+  { s:'…', t:'Powlekliście się z powrotem do gabinetu dyrektorki.' },
+  { s:'Sara', t:'Musimy to skończyć.' },
+  { s:'…', t:'W upiornej ciszy Sara podeszła do ściany i stanęła przed sejfem. W jej zakrwawionej dłoni wciąż tkwił mały, mosiężny klucz.' },
+  { s:'…', t:'Usłyszeliśmy ciche kliknięcie, a potem zgrzyt mechanizmu. Ciężkie, metalowe drzwi ustąpiły z przeciągłym jękiem.', action: ()=>sfx('sfx-safe-open', 0.8) },
+  { s:'…', t:'W sejfie nie było nic oprócz jednego, oprawionego w czarną skórę dziennika. Prywatny dziennik dyrektorki Marii S.' },
+  { s:'…', t:'Sara położyła go na biurku. Otworzyła na ostatnim wpisie i zaczęła czytać na głos, a jej słowa spadały na nas jak kamienie.' },
+  { s:'Sara', t:'„Zosia staje się dla nich zagrożeniem. Jej… zdolności… wymykają się spod kontroli. Wie rzeczy. Widzi rzeczy. Pozostałe dzieci... teraz się jej boją. Nazywają ją czarownicą.”' },
+  { s:'…', t:'Przewróciła kartkę. Szelest papieru był jedynym dźwiękiem w pokoju.' },
+  { s:'Sara', t:'„Próbowałam z nimi rozmawiać. Ale strach jest jak zaraza. Zmienił ich. Sara... stała się ich przywódczynią. Sławek... patrzy na Zosię z nieufnością. Monika płacze ze strachu, a Karolina obserwuje wszystko w milczeniu.”' },
+  { s:'…', t:'Monika wydała z siebie zduszony jęk, jakby została uderzona.' },
+  { s:'…', t:'Głos Sary łamał się przy ostatnim zdaniu. Data… to była noc, kiedy Zosia zniknęła.' },
+  { s:'Sara', t:'„Zabrali ją do lasu. Słyszałam, jak planowali to w nocy. Chcą ją ‘oczyścić’. Mój Boże, to tylko dzieci… ale to, co zamierzają zrobić… to nie Zosia jest potworem. To oni. Oni są prawdziwymi potworami.”' },
+  { s:'…', t:'Dziennik wysunął się z drżących rąk Sary i upadł z głuchym plaśnięciem na podłogę. I wtedy ściany gabinetu zawirowały.' },
+  
+  { type: 'flashback', action: triggerFlashback },
+
+  { s:'…', t:'Krzyknąłem i wszystko wróciło. Wszyscy patrzyliśmy na siebie, ale nie widzieliśmy już przyjaciół. Widzieliśmy morderców.' },
+  { s:'…', t:'W oczach Sary widziałem zimną przywódczynię. W oczach Moniki – płaczącą oprawczynię. W oczach Karo – milczącą obserwatorkę. A oni w moich widzieli to samo.' },
+  { s:'…', t:'Potwór z piwnicy był niczym. Zwłoki dyrektorki były niczym. Cała groza tego miejsca była tylko ułudą.' },
+  { s:'…', t:'Echem tego, co my sami zrobiliśmy tamtej nocy w lesie.'},
+  { s:'…', t:'Szukaliśmy potwora, a on przez cały czas był w nas.' },
+  { end:true }
+];
+
+/* Start gry */
+renderStep();
+/* Fokus w pole dialogu dla klawiatury/screen readera */
+document.getElementById('text-box').focus();
+</script>
+</body>
+</html>

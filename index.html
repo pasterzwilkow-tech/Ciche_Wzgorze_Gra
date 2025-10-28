@@ -1,0 +1,377 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Kamil Radoń — Ciche Wzgórze</title>
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,700;1,400&display=swap');
+
+    :root {
+        --bg-color: #000;
+        --text-color: #e2e8f0;
+        --border-color: #44403c;
+        --panel-bg: rgba(12, 10, 9, 0.85);
+        --name-narrator: #c7a26d;
+    }
+
+    * { box-sizing: border-box; }
+
+    body, html {
+        height: 100%;
+        margin: 0;
+        font-family: 'Lora', serif;
+        background-color: var(--bg-color);
+        color: var(--text-color);
+        overflow: hidden;
+    }
+
+    #game-world {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        background-color: #000;
+        cursor: pointer;
+    }
+
+    .layer {
+        position: absolute;
+        inset: 0;
+        background-size: cover;
+        background-position: center;
+        transition: opacity 1.5s ease-in-out;
+    }
+
+    #background-layer {
+        background-image: url('images/las_tlo.png');
+        filter: brightness(0.6);
+    }
+    
+    #character-layer {
+        display: flex;
+        justify-content: center;
+        align-items: flex-end;
+    }
+
+    .character-sprite {
+        position: absolute;
+        bottom: 0;
+        height: 100%;
+        width: 60%;
+        background-size: contain;
+        background-position: bottom center;
+        background-repeat: no-repeat;
+        opacity: 0;
+        transform: translateY(20px);
+        transition: opacity 1s ease-out, transform 1s ease-out;
+        filter: brightness(0.8);
+    }
+
+    .character-sprite.visible {
+        opacity: 1;
+        transform: translateY(0);
+    }
+    
+    #char-girl {
+        background-image: url('images/dziewczynka.png');
+    }
+
+    #char-creature {
+        background-image: url('images/potwor.png');
+        height: 120%;
+        width: 70%;
+        filter: brightness(0.6);
+    }
+
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
+      20%, 40%, 60%, 80% { transform: translateX(5px); }
+    }
+    
+    .shake-effect {
+        animation: shake 0.5s ease-in-out;
+    }
+
+    #ui-layer {
+        top: auto; 
+        bottom: 0;
+        left: 0;
+        width: 100%;
+    }
+
+    #text-box {
+        width: 100%;
+        min-height: 220px;
+        background: var(--panel-bg);
+        border-top: 3px solid var(--border-color);
+        padding: 25px 5%;
+        backdrop-filter: blur(3px);
+    }
+
+    #speaker-name {
+        font-weight: bold;
+        font-size: 1.3em;
+        margin-bottom: 15px;
+        display: block;
+        color: var(--name-narrator);
+    }
+
+    #dialogue-text {
+        line-height: 1.8;
+        font-size: 1.25em;
+    }
+    
+    #dialogue-text .typing-cursor {
+        display: inline-block;
+        width: 10px;
+        height: 1.2em;
+        background-color: var(--text-color);
+        margin-left: 5px;
+        animation: blink 0.8s steps(1) infinite;
+    }
+
+    @keyframes blink {
+        50% { opacity: 0; }
+    }
+
+    #continue-prompt {
+        text-align: right;
+        font-style: italic;
+        color: #9ca3af;
+        margin-top: 15px;
+        opacity: 0;
+        animation: pulse 2s infinite;
+    }
+
+    #continue-prompt.visible { opacity: 1; }
+        
+    #start-screen {
+        position: absolute;
+        inset: 0;
+        background-color: #000;
+        z-index: 100;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        cursor: pointer;
+        background-size: cover;
+        background-position: center;
+        background-image: linear-gradient(rgba(0,0,0,0.6), rgba(0,0,0,0.6)), url('images/ekran_tytulowy.png');
+    }
+    #start-screen h1 { font-size: 3.5em; color: white; text-shadow: 0 0 10px black; }
+    #start-screen p { font-size: 1.5em; animation: pulse 2s infinite; color: #ccc; }
+    
+    @keyframes pulse {
+        50% { opacity: 0.7; }
+    }
+</style>
+</head>
+<body>
+
+    <div id="game-world" style="display: none;">
+        <div id="background-layer" class="layer"></div>
+        <div id="character-layer" class="layer">
+             <div id="char-creature" class="character-sprite"></div>
+             <div id="char-girl" class="character-sprite"></div>
+        </div>
+        <div id="ui-layer" class="layer">
+            <div id="text-box">
+                <div>
+                    <span id="speaker-name"></span>
+                    <p id="dialogue-text"></p>
+                </div>
+                <div id="continue-prompt">▼</div>
+            </div>
+        </div>
+        </div>
+    
+    <div id="start-screen">
+        <h1>Ciche Wzgórze</h1>
+        <p>Kliknij, aby rozpocząć</p>
+    </div>
+    
+    <audio id="music" loop>
+        <source src="audio/muzyka_tlo.mp3" type="audio/mpeg">
+    </audio>
+    <audio id="ambience" loop>
+        <source src="audio/szum_lasu.mp3" type="audio/mpeg">
+    </audio>
+    <audio id="scream">
+        <source src="https://audio-previews.elements.envatousercontent.com/files/452425713/preview.mp3" type="audio/mpeg">
+    </audio>
+
+<script>
+    // ZMIANA: Usunięto { type: 'end' } z końca tablicy
+    const script = [
+        { type: 'narration', text: "Bywa czasem tak, że zdajesz sobie sprawę, iż śnisz, ale nie możesz się obudzić." },
+        { type: 'narration', text: "Otaczał mnie las. Mroczny i przerażający, jakby wyrwany z najgorszych dziecięcych koszmarów." },
+        { type: 'narration', text: "Biegłem, choć moje kroki nie wydawały dźwięku. Gęsta mgła snuła się między drzewami." },
+        { type: 'narration', text: "Czułem, jak przenika przez ubranie i osiada na skórze." },
+        { type: 'narration', text: "W pewnym momencie coś zamajaczyło między drzewami. Mała, dziecięca sylwetka w skromnej, niebieskiej sukience.", action: { show: 'girl' } },
+        { type: 'narration', text: "Zatrzymałem się gwałtownie." },
+        { type: 'narration', text: "„To nie może być przecież ona!” — pomyślałem przerażony." },
+        { type: 'narration', text: "Postać zniknęła między drzewami, a ja ruszyłem za nią bezwiednie." },
+        { type: 'narration', text: "— Zaczekaj! — to co miało być krzykiem okazało się ledwie szeptem. Biegłem jednak dalej, zapominając o strachu i zmęczeniu." },
+        { type: 'narration', text: "Dotarłem na niewielką polanę. Czekała już na mnie. Stała tyłem, drobna i bezbronna." },
+        { type: 'narration', text: "Powoli odwróciła się w moją stronę. Blada twarz, usta wykrzywione w grymasie, błękitne oczy pełne pogardy." },
+        { type: 'narration', text: "Z cienia za jej plecami wyłoniła się wysoka, groteskowa istota, nieludzko chuda, z ramionami sięgającymi niemal do kolan.", action: { show: 'creature' } },
+        { type: 'narration', text: "Koścista ręka, zakończona długimi szponami, zacisnęła się na dłoni dziewczynki." },
+        { type: 'narration', text: "Głowa istoty, pozbawiona rysów, drżała w ekscytacji." },
+        { type: 'narration', text: "Z pustego miejsca po ustach rozbrzmiała ogłuszająca fala dźwięków — setki głosów krzyczących jednocześnie.", action: { effect: 'shake', sfx: 'scream' } },
+        { type: 'narration', text: "Upadłem na kolana, zatykając uszy. Dziewczynka odwróciła się i zniknęła w mroku, prowadzona za rękę.", action: { hide: ['girl', 'creature'] } },
+        { type: 'narration', text: "…", action: { effect: 'fadeToBlack' } },
+        { type: 'narration', text: "Budzę się z krzykiem, mokry od lepkiego potu." },
+        { type: 'narration', text: "Pokój tonie w półmroku. Blade światło księżyca sączy się przez okno." },
+        { type: 'narration', text: "Spoglądam na budzik. Jest trzecia nad ranem." }
+    ];
+
+    let currentStep = 0;
+    let isTyping = false;
+    let audioStarted = false;
+    
+    let currentTypingProcess = {
+        timer: null,
+        finish: null
+    };
+
+    const gameWorld = document.getElementById('game-world');
+    const speakerNameEl = document.getElementById('speaker-name');
+    const dialogueTextEl = document.getElementById('dialogue-text');
+    const continuePrompt = document.getElementById('continue-prompt');
+    const startScreen = document.getElementById('start-screen');
+    const musicAudio = document.getElementById('music');
+    const ambienceAudio = document.getElementById('ambience');
+    const screamAudio = document.getElementById('scream');
+    // ZMIANA: Usunięto referencję do finalChoice
+    
+    const characters = {
+        girl: document.getElementById('char-girl'),
+        creature: document.getElementById('char-creature')
+    };
+
+    function typeWriter(text, element, speed = 25) {
+        return new Promise(resolve => {
+            if (currentTypingProcess.timer) clearTimeout(currentTypingProcess.timer);
+            
+            isTyping = true;
+            continuePrompt.classList.remove('visible');
+            element.innerHTML = '';
+            let i = 0;
+            const cursor = '<span class="typing-cursor"></span>';
+            element.innerHTML = cursor;
+
+            const finishTyping = () => {
+                clearTimeout(currentTypingProcess.timer);
+                element.innerHTML = text;
+                isTyping = false;
+                continuePrompt.classList.add('visible');
+                resolve();
+            };
+
+            currentTypingProcess.finish = finishTyping;
+
+            function typing() {
+                if (i < text.length) {
+                    element.innerHTML = text.substring(0, i + 1) + cursor;
+                    i++;
+                    currentTypingProcess.timer = setTimeout(typing, speed);
+                } else {
+                    finishTyping();
+                }
+            }
+            typing();
+        });
+    }
+
+    function handleAction(action) {
+        if (!action) return;
+        
+        if (action.show) characters[action.show].classList.add('visible');
+        if (action.hide) action.hide.forEach(charId => characters[charId].classList.remove('visible'));
+        if (action.effect === 'shake') {
+            gameWorld.classList.add('shake-effect');
+            setTimeout(() => gameWorld.classList.remove('shake-effect'), 500);
+        }
+        if (action.sfx === 'scream') {
+            screamAudio.volume = 0.5;
+            screamAudio.play();
+        }
+        if (action.effect === 'fadeToBlack') {
+            gameWorld.style.transition = 'opacity 1.5s ease-out';
+            gameWorld.style.opacity = '0';
+            setTimeout(() => {
+                document.getElementById('background-layer').style.backgroundImage = 'none';
+                gameWorld.style.opacity = '1';
+            }, 1500);
+        }
+    }
+    
+    // ZMIANA: Usunięto blok 'if (step.type === 'end')'
+    async function displayStep(stepIndex) {
+        if (isTyping) return;
+        const step = script[stepIndex];
+        
+        speakerNameEl.textContent = '...';
+        handleAction(step.action);
+        await typeWriter(step.text, dialogueTextEl);
+    }
+
+    // ZMIANA: Zmodyfikowano logikę funkcji nextStep
+    function nextStep() {
+        if (isTyping) {
+            if (currentTypingProcess.finish) currentTypingProcess.finish();
+        } else {
+            // Sprawdź, czy jesteśmy na ostatnim kroku
+            if (currentStep >= script.length - 1) {
+                // Jeśli tak, przejdź do następnego pliku
+                window.location.href = 'room.html';
+                return; // Zatrzymaj dalsze wykonywanie funkcji
+            }
+            
+            // Jeśli nie, kontynuuj normalnie
+            currentStep++;
+            displayStep(currentStep);
+        }
+    }
+    
+    function startGame() {
+        if (audioStarted) return;
+        audioStarted = true;
+
+        const musicPromise = musicAudio.play();
+        if (musicPromise !== undefined) {
+            musicPromise.then(() => {
+                musicAudio.volume = 0.6;
+            }).catch(error => {
+                console.error("Błąd odtwarzania muzyki:", error);
+            });
+        }
+        
+        const ambiencePromise = ambienceAudio.play();
+        if (ambiencePromise !== undefined) {
+             ambiencePromise.then(() => {
+                ambienceAudio.volume = 0.2;
+            }).catch(error => {
+                console.error("Błąd odtwarzania dźwięków tła:", error);
+            });
+        }
+        
+        startScreen.style.transition = 'opacity 1s ease-out';
+        startScreen.style.opacity = '0';
+        setTimeout(() => {
+            startScreen.style.display = 'none';
+        }, 1000);
+
+        gameWorld.style.display = 'block';
+        displayStep(0);
+    }
+
+    gameWorld.addEventListener('click', nextStep);
+    startScreen.addEventListener('click', startGame);
+
+</script>
+</body>
+</html>

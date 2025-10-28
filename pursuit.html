@@ -1,0 +1,404 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Ciche Wzgórze — Pościg</title>
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,700;1,400&display=swap');
+
+    :root {
+        --bg-color: #000;
+        --text-color: #e2e8f0;
+        --border-color: #44403c;
+        --panel-bg: rgba(12, 10, 9, 0.9);
+        --choice-bg: rgba(41, 37, 36, 0.8);
+        --choice-hover-bg: #c7a26d;
+        --name-narrator: #c7a26d;
+    }
+
+    * { box-sizing: border-box; }
+
+    body, html {
+        height: 100%; margin: 0;
+        font-family: 'Lora', serif;
+        background-color: var(--bg-color);
+        color: var(--text-color);
+        overflow: hidden;
+    }
+
+    #game-world {
+        position: relative; width: 100%; height: 100%;
+        background-color: #000;
+    }
+
+    .layer {
+        position: absolute; inset: 0;
+        background-size: cover; background-position: center;
+        transition: opacity 1.5s ease-in-out, background-image 1s ease-in-out;
+    }
+
+    #background-layer {
+        background-image: url('images/pokoj_jasny.png');
+        filter: brightness(0.7);
+    }
+
+    #ui-layer {
+        display: flex; flex-direction: column;
+        justify-content: flex-end; align-items: center;
+        padding: 20px;
+    }
+
+    #text-box {
+        width: 100%; max-width: 900px;
+        min-height: 180px;
+        background: var(--panel-bg);
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        padding: 25px 30px;
+        backdrop-filter: blur(3px);
+        margin-bottom: 20px;
+    }
+
+    #speaker-name {
+        font-weight: bold; font-size: 1.3em;
+        margin-bottom: 15px; display: block;
+        color: var(--name-narrator);
+    }
+
+    #dialogue-text { line-height: 1.8; font-size: 1.25em; }
+    
+    #choices-box {
+        width: 100%; max-width: 900px;
+        display: flex; flex-direction: column; gap: 10px;
+    }
+
+    .choice-btn {
+        background: var(--choice-bg);
+        border: 1px solid var(--border-color);
+        color: var(--text-color);
+        font-family: 'Lora', serif; font-size: 1.1em;
+        padding: 15px 20px; text-align: left;
+        cursor: pointer; border-radius: 5px;
+        transition: all 0.2s;
+        opacity: 0; transform: translateY(10px);
+        animation: slideUpChoice 0.5s forwards;
+    }
+
+    .choice-btn:hover {
+        background: var(--choice-hover-bg);
+        color: #000;
+        border-color: var(--choice-hover-bg);
+    }
+    
+    @keyframes slideUpChoice { to { opacity: 1; transform: translateY(0); } }
+
+    .overlay {
+        position: fixed; inset: 0; z-index: 100;
+        display: none; 
+        align-items: center; justify-content: center;
+        background: rgba(0,0,0,0.85);
+        opacity: 0; transition: opacity 0.5s;
+    }
+    .overlay.visible { 
+        display: flex;
+        opacity: 1; 
+    }
+    
+    .document {
+        width: 90%; max-width: 700px; height: 80%;
+        background-color: #fdfaf4;
+        background-image: url('images/papier.png');
+        color: #333;
+        padding: 40px; border: 1px solid #ccc;
+        box-shadow: 0 0 30px black;
+        overflow-y: auto; cursor: pointer;
+    }
+    .document h2 { margin-top: 0; font-size: 1.5em; text-align: center; }
+    .document p { line-height: 2; white-space: pre-wrap; font-size: 1.1em; }
+    
+    #final-choice {
+        display: none; position: absolute;
+        bottom: 40px; left: 50%;
+        transform: translateX(-50%); z-index: 50;
+    }
+
+    .minigame-container {
+        width: min(98vw, 1400px);
+        height: min(98vh, 900px);
+        background: #111;
+        border: 2px solid var(--border-color);
+        border-radius: 10px;
+        box-shadow: 0 0 40px black;
+        overflow: hidden;
+    }
+    .minigame-container iframe {
+        width: 100%;
+        height: 100%;
+        border: 0;
+    }
+
+</style>
+</head>
+<body>
+    <div id="game-world">
+        <div id="background-layer" class="layer"></div>
+        
+        <div id="ui-layer" class="layer">
+            <div id="text-box">
+                <span id="speaker-name">...</span>
+                <p id="dialogue-text"></p>
+            </div>
+            <div id="choices-box"></div>
+            <div id="final-choice">
+                <button class="choice-btn" style="padding: 15px 30px;" onclick="window.location.href='car.html'">Obudź się.</button>
+            </div>
+        </div>
+
+        <div id="article-overlay" class="overlay">
+            <div class="document">
+                <h2>ZAGINIĘŁA DZIEWCZYNKA W CICHYM WZGÓRZU</h2>
+
+                <p><b>„Gazeta Głos”</b><br><br>
+
+Wciąż nie milkną echa sprawy, która od miesięcy spędza sen z powiek mieszkańców Cichego Wzgórza. Siedmioletnia Zosia K., wychowanka miejscowego sierocińca, zniknęła bez śladu w listopadowy wieczór. Dziewczynkę ostatni raz widziano, gdy bawiła się w pobliżu lasu, zaledwie kilkaset metrów od budynku placówki.
+
+<br><br>
+
+Świadkowie twierdzą, że widzieli sylwetkę dziecka, które biegło w stronę miasteczka, a potem „jakby rozpłynęło się we mgle”. Inni mówią o podejrzanym mężczyźnie w długim płaszczu, który kręcił się w tamtej okolicy. Policja nie potwierdza tych doniesień.
+
+<br><br>
+
+Mimo intensywnych działań, do dziś nie odnaleziono żadnych śladów Zosi. Zabezpieczono jedynie czerwoną wstążkę, którą dziewczynka nosiła we włosach, a którą ktoś zawiesił na drzewie. Starsi wspominają, że to nie pierwsze tajemnicze zniknięcie dziecka w tej okolicy...</p>
+            </div>
+        </div>
+
+        <div id="minigame-overlay" class="overlay">
+            <div class="minigame-container">
+                <iframe id="minigame-frame" src="about:blank" title="Wspomnienie"></iframe>
+            </div>
+        </div>
+    </div>
+    
+    <audio id="music" loop><source src="audio/horror-thriller.mp3" type="audio/mpeg"></audio>
+    <audio id="sfx-door"><source src="audio/close-door-382723.mp3"></audio>
+    <audio id="sfx-horror"><source src="https://cdn.pixabay.com/audio/2022/11/22/audio_2912f7a26f.mp3"></audio>
+
+<script>
+    const dialogueTextEl = document.getElementById('dialogue-text');
+    const choicesBoxEl = document.getElementById('choices-box');
+    const backgroundLayer = document.getElementById('background-layer');
+    const articleOverlay = document.getElementById('article-overlay');
+    const finalChoice = document.getElementById('final-choice');
+    
+    const minigameOverlay = document.getElementById('minigame-overlay');
+    const minigameFrame = document.getElementById('minigame-frame');
+    
+    const sfx = {
+        door: document.getElementById('sfx-door'),
+        horror: document.getElementById('sfx-horror'),
+    };
+    
+    let musicStarted = false;
+    function startMusicIfNeeded() {
+        if (!musicStarted) {
+            const musicAudio = document.getElementById('music');
+            if (musicAudio) {
+                musicAudio.volume = 0.6;
+                musicAudio.play().catch(e => {});
+                musicStarted = true;
+            }
+        }
+    }
+
+    function showText(text) { dialogueTextEl.innerHTML = text; }
+    
+    function setBackground(imageName) {
+        backgroundLayer.style.backgroundImage = `url('images/${imageName}')`;
+    }
+
+    function showChoices(choices) {
+        choicesBoxEl.innerHTML = '';
+        choices.forEach((choice, index) => {
+            const button = document.createElement('button');
+            button.className = 'choice-btn';
+            button.textContent = choice.text;
+            button.style.animationDelay = `${index * 100}ms`;
+            
+            button.onclick = () => {
+                startMusicIfNeeded();
+                choicesBoxEl.innerHTML = '';
+                choice.action();
+            };
+            choicesBoxEl.appendChild(button);
+        });
+    }
+    
+    function openMinigame() {
+        minigameFrame.src = 'blog — kopia.html';
+        minigameOverlay.classList.add('visible');
+    }
+
+    function closeMinigame() {
+        minigameOverlay.classList.remove('visible');
+        minigameFrame.src = 'about:blank';
+        scenes.wakeup();
+    }
+
+    const scenes = {
+        start: () => {
+            showText("Stoisz samotnie w ciszy swojego pokoju. Wciąż słyszysz w głowie metaliczny hałas z zewnątrz.");
+            showChoices([
+                { text: "Podejdź do okna", action: scenes.goToWindow },
+                { text: "Zignoruj to i spróbuj zasnąć", action: scenes.goToSleep }
+            ]);
+        },
+
+        goToWindow: () => {
+            setBackground('okno_widok.png');
+            showText("Podchodzisz do okna. W blasku latarni widzisz przewrócony kosz na śmieci. Ktoś w długim płaszczu i kapeluszu oddala się pospiesznie, znikając we mgle.");
+            showChoices([
+                { text: "Wybiegnij za nim!", action: scenes.getDressed },
+                { text: "To nie twoja sprawa. Idź spać.", action: scenes.goToSleep }
+            ]);
+        },
+        
+        getDressed: () => {
+            showText("Adrenalina bierze górę. Wciągasz na siebie spodnie, sweter i buty. Musisz dowiedzieć się, co się dzieje.");
+            showChoices([
+                { text: "Wyjdź na klatkę schodową", action: scenes.goToStairs }
+            ]);
+        },
+
+        goToStairs: () => {
+            sfx.door.play();
+            setBackground('klatka.png');
+            showText("Wychodzisz na korytarz. Zimne powietrze owiewa ci twarz. Na posadzce dostrzegasz mokre ślady małych stóp... Prowadzą na dół.");
+            showChoices([
+                { text: "Zbiegnij na dół", action: scenes.goOutside }
+            ]);
+        },
+        
+        goOutside: () => {
+            setBackground('ulica.png');
+            showText("Wypadasz na zewnątrz. Pod latarnią leży przewrócony kosz, jego zawartość rozsypała się po mokrym chodniku.");
+            showChoices([
+                { text: "Przeszukaj bałagan", action: scenes.searchTrash },
+                { text: "Idź w stronę, w którą uciekała postać", action: scenes.goToGate }
+            ]);
+        },
+
+        searchTrash: () => {
+            showText("Rozgarniasz śmieci butem. Pod mokrym kartonem znajdujesz złożony na czworo, stary wycinek z gazety.");
+            showChoices([
+                { text: "Przeczytaj artykuł", action: scenes.readArticle },
+                { text: "Idź w stronę, w którą uciekała postać", action: scenes.goToGate }
+            ]);
+        },
+        
+        readArticle: () => {
+            articleOverlay.classList.add('visible');
+            articleOverlay.onclick = () => {
+                articleOverlay.classList.remove('visible');
+                showText("Po przeczytaniu artykułu serce bije ci jeszcze mocniej. To nie może być przypadek.");
+                showChoices([
+                    { text: "Ruszaj w pościg", action: scenes.goToGate }
+                ]);
+            };
+        },
+
+        goToGate: () => {
+            setBackground('brama.png');
+            showText("Ślady butów prowadzą do mrocznej czeluści bramy między kamienicami. Mgła gęstnieje, pachnie stęchlizną.");
+            showChoices([
+                { text: "Wejdź w ciemność", action: scenes.enterGate }
+            ]);
+        },
+        
+        enterGate: () => {
+            sfx.horror.play();
+            choicesBoxEl.innerHTML = '';
+            showText("Stawiasz krok w głąb. Nagle czujesz, jak coś miękkiego ociera się o twoją nogę. Zanim zdążysz zareagować, świat wokół ciebie zaczyna się rozpływać...");
+            setTimeout(openMinigame, 2500);
+        },
+        
+        wakeup: () => {
+            setBackground('brama.png');
+            showText("Budzisz się gwałtownie, leżąc na zimnym betonie w bramie. W głowie wciąż dudnią ci echa koszmaru... wspomnienia walki z cieniem w lesie. To nie był zwykły sen. To było ostrzeżenie. Musisz jechać.");
+            choicesBoxEl.innerHTML = '';
+            setTimeout(() => {
+                window.location.href = 'car.html';
+            }, 3000);
+        },
+
+        goToSleep: () => {
+            setBackground('czern.png'); 
+            showText("Postanawiasz to zignorować. Kładziesz się do łóżka, próbując zapomnieć o tym, co widziałeś i słyszałeś. Sen przychodzi szybko. Zbyt szybko.");
+            setTimeout(() => scenes.dream_1(), 2500);
+        },
+
+        dream_1: () => {
+            setBackground('koszmar_las.png');
+            document.body.style.cursor = 'pointer';
+            choicesBoxEl.innerHTML = '';
+           showText("Zamykasz oczy. Ciemność pochłania cię niczym żywa istota. Ponownie znajdujesz się w lesie, ale kora drzew jest czerwona i wilgotna...");
+
+            document.getElementById('game-world').onclick = scenes.dream_2;
+
+        },
+
+        dream_2: () => {
+
+            setBackground('koszmar_twarze.png');
+
+            showText("Gałęzie przypominają nabrzmiałe żyły. Z ziemi wynurzają się twarze z pustymi oczodołami. Coś obrzydliwie mlaska pod twoimi stopami...");
+
+            document.getElementById('game-world').onclick = scenes.dream_3;
+
+        },
+
+        dream_3: () => {
+
+            setBackground('koszmar_dzwon.png');
+
+            showText("Rozbrzmiewa bicie dzwonu. Każdy dźwięk rozsadza ci czaszkę. Słyszysz głos, który nie należy do nikogo i do wszystkich naraz: <i>„Jedź. Czekam.”</i>");
+
+            document.getElementById('game-world').onclick = scenes.dream_4;
+
+        },
+
+        dream_4: () => {
+
+            setBackground('koszmar_samochod.png');
+
+            showText("Widzisz światła samochodu, ale to nie reflektory. To żółte, gnijące oczy. Widzisz trzy sylwetki, które znasz, choć ich twarze są zamazane. Głosy szepczą: <i>„Razem. Musimy wrócić.”</i>");
+
+            document.getElementById('game-world').onclick = scenes.dream_5;
+
+        },
+
+        dream_5: () => {
+
+            setBackground('koszmar_napis.png');
+
+            showText("Na ziemi pojawia się napis, ułożony z fragmentów kości: <b>Z O S I A.</b>");
+
+            document.getElementById('game-world').onclick = null;
+
+            document.body.style.cursor = 'default';
+
+            finalChoice.style.display = 'block';
+
+        }
+    }; // <-- Tu był błąd, usunąłem dwie zbędne klamry '}'
+
+    window.addEventListener('message', (event) => {
+        if (event.data === 'minigameFinished') {
+            closeMinigame();
+        }
+    });
+
+    scenes.start();
+</script>
+</body>
+</html>

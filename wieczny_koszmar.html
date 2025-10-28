@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="color-scheme" content="dark" />
+<title>Ciche Wzgórze — Wieczny Koszmar</title>
+<link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --bg-color:#000; --text-color:#e2e8f0; --border-color:#44403c;
+    --panel-bg:rgba(12,10,9,0.88); --choice-bg:rgba(41,37,36,0.86);
+    --choice-hover-bg:#c7a26d;
+  }
+  *{box-sizing:border-box;}
+  html,body{height:100%;margin:0;background:#000;color:var(--text-color);font-family:'Lora',serif;overflow:hidden;}
+  #game-world{position:relative;width:100%;height:100%;background:#000;}
+  .layer{position:absolute;inset:0}
+
+  .bg{position:absolute;inset:0;background-size:cover;background-position:center;opacity:0;transition:opacity 1.5s ease-in-out;filter:brightness(.6);}
+  .bg.visible{opacity:1}
+  
+  #fx-layer {
+    background-color: #000;
+    opacity: 1;
+    transition: opacity 2.5s ease-in;
+    pointer-events: none;
+  }
+  @keyframes shake {
+    0%,100%{transform:translateX(0)} 10%,30%,50%,70%,90%{transform:translateX(-8px)} 20%,40%,60%,80%{transform:translateX(8px)}
+  }
+  .shake-effect { animation: shake 0.6s ease-in-out; }
+
+  #text-container{
+    position:absolute; inset:0;
+    display:flex; align-items:center; justify-content:center;
+    text-align:center; padding:20px;
+    opacity: 0;
+    transition: opacity 1s ease-in-out;
+  }
+  #text-container.visible { opacity: 1; }
+  .narrative-text {
+    max-width: 800px;
+    font-size: 1.5em;
+    line-height: 1.8;
+    color: var(--text-color);
+    text-shadow: 0 0 10px #000;
+  }
+
+  .choice-btn{background:var(--choice-bg);border:1px solid var(--border-color);color:var(--text-color);font-family:'Lora',serif;font-size:1.05rem;padding:14px 18px;text-align:left;cursor:pointer;border-radius:8px;transition:all .18s;opacity:0;transform:translateY(8px);animation:choiceIn .3s forwards}
+  .choice-btn:hover{background:var(--choice-hover-bg);color:#000;border-color:var(--choice-hover-bg)}
+  @keyframes choiceIn{to{opacity:1;transform:translateY(0)}}
+  
+  #start-button-container {
+    position:absolute; inset:0;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .start-btn{background:transparent;border:1px solid var(--border-color);color:var(--text-color);font-family:'Lora',serif;font-size:1.5em;padding:15px 30px;cursor:pointer;border-radius:5px;transition:all .2s;}
+  .start-btn:hover{background:var(--choice-hover-bg);color:black;}
+</style>
+</head>
+<body>
+  <div id="game-world">
+    <div id="bg-stack" class="layer" aria-hidden="true">
+      <div class="bg" id="bgA"></div>
+    </div>
+    <div id="fx-layer" class="layer"></div>
+    <div id="text-container" class="layer">
+      <p class="narrative-text"></p>
+    </div>
+    <div id="start-button-container" class="layer">
+      <button class="start-btn" type="button">[ Przebudź się ]</button>
+    </div>
+  </div>
+
+  <audio id="music" loop preload="auto"><source src="audio/horror3.mp3" type="audio/mpeg"></audio>
+  <audio id="sfx-heartbeat-loop" loop preload="auto"><source src="audio/serce.mp3"></audio>
+  
+  <audio id="sfx-zosia-zabiliscie" preload="auto"><source src="audio/zosia_zabiliscie.mp3" type="audio/mpeg"></audio>
+  <audio id="sfx-zosia-wybor" preload="auto"><source src="audio/zosia_wybor.mp3" type="audio/mpeg"></audio>
+  <audio id="sfx-zosia-litosc" preload="auto"><source src="audio/zosia_litosc.mp3" type="audio/mpeg"></audio>
+  <audio id="sfx-zosia-wszyscy" preload="auto"><source src="audio/zosia_wszyscy.mp3" type="audio/mpeg"></audio>
+  <script>
+/* ===== DOM & ZMIENNE ===== */
+const textContainer = document.getElementById('text-container');
+const narrativeText = textContainer.querySelector('.narrative-text');
+const startButtonContainer = document.getElementById('start-button-container');
+const startButton = startButtonContainer.querySelector('.start-btn');
+const gameWorld = document.getElementById('game-world');
+const bgA = document.getElementById('bgA');
+const fxLayer = document.getElementById('fx-layer');
+
+/* ===== AUDIO & EFEKTY ===== */
+function sfx(id, vol=1, loop=false){
+  const a = document.getElementById(id);
+  if(a) try{ a.currentTime=0; a.volume=vol; a.loop=loop; a.play(); } catch(e){}
+}
+function stopSfx(id){
+  const a = document.getElementById(id);
+  if(a) try { a.pause(); } catch(e) {}
+}
+
+/* ===== SILNIK SCENY ===== */
+function showText(text, callback, delay = 4000) {
+    textContainer.classList.remove('visible');
+    setTimeout(() => {
+        narrativeText.innerHTML = text;
+        textContainer.classList.add('visible');
+        if (callback) {
+            setTimeout(callback, delay);
+        }
+    }, 500);
+}
+
+function changeBackground(fileName) {
+    bgA.style.backgroundImage = `url('images/${fileName}')`;
+    bgA.classList.add('visible');
+}
+
+// =========================================================================
+// ===== POPRAWIONA FABUŁA Z RÓŻNYMI ŚCIEŻKAMI =====
+// =========================================================================
+const sceneSequence = {
+    start: () => {
+        sfx('music', 0.5, true);
+        showText('Nagle poczułem, jak podłoga pod moimi stopami mięknie i faluje. Ściany gabinetu... zaczęły się rozpływać, tracić kontury...', sceneSequence.polana);
+    },
+    polana: () => {
+        changeBackground('polana_final.png');
+        showText('Gdy świat znów nabrał kształtów, nie byliśmy już w sierocińcu. Staliśmy na tej samej, przeklętej polanie w lesie.', sceneSequence.szept);
+    },
+    szept: () => {
+        // ZMIANA: Odtwarzanie audio zamiast ogólnego szeptu
+        sfx('sfx-zosia-zabiliscie', 1.0);
+        showText('W naszych głowach znów rozbrzmiały szepty. Głos Zosi – czysty, zimny i pełen gniewu.<br><i>„Zabiliście mnie. Myśleliście, że uciekniecie. Teraz musicie zapłacić.”</i>', sceneSequence.pojawienieSieZosi, 6000); // Wydłużony czas na odsłuchanie
+    },
+    pojawienieSieZosi: () => {
+        showText('Przed nami mgła zaczęła gęstnieć, formując sylwetkę Zosi. Wyglądała dokładnie tak, jak w chwili, gdy ją zabiliśmy – jej ciało było posiniaczone, a z jej pustych, czarnych oczu emanował czysty, nieskończony ból.', sceneSequence.wybor);
+    },
+    wybor: () => {
+        // ZMIANA: Odtwarzanie audio
+        sfx('sfx-zosia-wybor', 1.0);
+        narrativeText.innerHTML += '<br><br><i>„Jedno z was musi zostać. Jedna dusza za jedną duszę. Musicie dokonać wyboru.”</i>';
+        const choices = document.createElement('div');
+        choices.style.marginTop = '30px';
+        choices.innerHTML = `
+            <button class="choice-btn" data-choice="beg">[Błagaj o litość]</button>
+            <button class="choice-btn" data-choice="refuse">[Odmów dokonania wyboru]</button>
+            <button class="choice-btn" data-choice="run">[Uciekajcie!]</button>
+        `;
+        narrativeText.appendChild(choices);
+        
+        const buttons = choices.querySelectorAll('.choice-btn');
+        buttons[0].addEventListener('click', () => sceneSequence.sciezkaBlaganie());
+        buttons[1].addEventListener('click', () => sceneSequence.sciezkaOdmowa());
+        buttons[2].addEventListener('click', () => sceneSequence.sciezkaUcieczka());
+    },
+
+    // --- ŚCIEŻKA 1: BŁAGANIE ---
+    sciezkaBlaganie: () => {
+        showText('Zaczynacie błagać, ale jej twarz pozostaje niewzruszona. Wasze słowa to tylko pusty dźwięk, który ginie w głuchej ciszy lasu.', () => {
+            // ZMIANA: Odtwarzanie audio
+            sfx('sfx-zosia-litosc', 1.0);
+            showText('<i>„Litość? Wy nie mieliście dla mnie litości. Wasze błagania nic nie znaczą.”</i>', sceneSequence.koniecPetli, 5000); // Wydłużony czas
+        });
+    },
+
+    // --- ŚCIEŻKA 2: ODMOWA ---
+    sciezkaOdmowa: () => {
+        showText('„Nie będziemy wybierać!” krzyczy Sara. „Nie damy ci tej satysfakcji!”', () => {
+            // ZMIANA: Odtwarzanie audio
+            sfx('sfx-zosia-wszyscy', 1.0);
+            showText('Zosia uśmiecha się zimno. <i>„Wybór nie należy do was. Skoro nie chcecie wybrać... wybiorę za was. Wszyscy zostaniecie.”</i>', sceneSequence.koniecPetli, 7000); // Wydłużony czas
+        });
+    },
+    
+    // --- ŚCIEŻKA 3: UCIECZKA ---
+    sciezkaUcieczka: () => {
+        showText('Postanowiliśmy uciec. Odwróciliśmy się i rzuciliśmy się biegiem w gęstą mgłę.', sceneSequence.pulapkaLasu);
+    },
+    pulapkaLasu: () => {
+        gameWorld.classList.add('shake-effect');
+        showText('Ale nie było ucieczki. Las ożył, by nas uwięzić. Gałęzie chwytały za ubrania, a gęsta mgła wdzierała się do naszych płuc, dławiąc nas.', () => {
+            gameWorld.classList.remove('shake-effect');
+            sceneSequence.koniecPetli();
+        });
+    },
+
+    // --- WSPÓLNE ZAKOŃCZENIE (PĘTLA) ---
+    koniecPetli: () => {
+        changeBackground('polana_konfrontacja.png');
+        showText('Ostatnią rzeczą, jaką zobaczyłem, była scena oświetlona bladym światłem księżyca. Staliśmy na polanie. Byliśmy dziećmi. W naszych małych dłoniach trzymaliśmy kije i kamienie. Przed nami stała zapłakana Zosia.', sceneSequence.zrozumienie);
+    },
+    zrozumienie: () => {
+        showText('I wtedy zrozumiałem. To nie był koniec. To była pętla.', sceneSequence.kara);
+    },
+    kara: () => {
+        showText('Naszą karą nie była śmierć, ale wieczne przeżywanie naszej zbrodni.', sceneSequence.finalneZdanie);
+    },
+    finalneZdanie: () => {
+        showText('Na zawsze uwięzieni w lesie, który stał się naszym piekłem, zmuszeni w nieskończoność powtarzać ten sam koszmar, którego sami byliśmy autorami.', sceneSequence.restart);
+    },
+    restart: () => {
+        fxLayer.style.transition = 'opacity 3s ease-in';
+        fxLayer.style.opacity = '1';
+        setTimeout(() => {
+            window.location.href = 'index.html';
+        }, 3500);
+    }
+};
+
+/* ===== START GRY ===== */
+startButton.addEventListener('click', () => {
+    startButtonContainer.style.display = 'none';
+    fxLayer.style.opacity = '0';
+    sfx('sfx-heartbeat-loop', 0.6, true);
+    setTimeout(sceneSequence.start, 2000);
+}, { once: true });
+
+</script>
+</body>
+</html>

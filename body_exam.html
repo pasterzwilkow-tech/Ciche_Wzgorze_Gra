@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Ciche Wzgórze — Badanie ciała (minigra)</title>
+<link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --bg:#000; --ink:#e2e8f0; --muted:#9aa3ad; --accent:#c7a26d;
+    --panel: rgba(12,10,9,.9); --border:#3b3b3b; --found:#84cc16; --warn:#ef4444;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0;background:var(--bg);color:var(--ink);font-family:'Lora',serif;}
+
+  /* Layout */
+  .wrap{display:grid;grid-template-columns:1fr 360px;gap:18px;max-width:1200px;margin:0 auto;padding:16px;}
+  @media (max-width: 980px){.wrap{grid-template-columns:1fr}}
+
+  /* Scena */
+  .scene{position:relative;aspect-ratio: 4 / 3; background:#0b0b0b;border:1px solid var(--border);border-radius:10px;overflow:hidden}
+  .scene img{width:100%;height:100%;object-fit:contain;display:block;filter:brightness(.92)} /* <-- ZMIANA JEST TUTAJ */
+
+  /* Hotspoty */
+  .hotspot{position:absolute;background:transparent;border:0;cursor:crosshair;outline:none;-webkit-tap-highlight-color: transparent;}
+  .hotspot:focus-visible{box-shadow:0 0 0 3px var(--accent)}
+  .hotspot[data-found="true"]{border-color:rgba(132,204,22,.35)}
+  
+  
+  to{opacity:0;transform:scale(1.04)}}
+
+  /* Panel boczny */
+  .panel{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:18px;display:flex;flex-direction:column;gap:14px}
+  .title{font-weight:700;color:var(--accent);letter-spacing:.3px}
+  .log{min-height:150px;max-height:280px;overflow:auto;border:1px dashed rgba(255,255,255,.12);border-radius:8px;padding:12px;line-height:1.7}
+  .log p{margin:.35rem 0}
+  .muted{color:var(--muted)}
+  .progress{display:flex;gap:6px;flex-wrap:wrap}
+  .tag{border:1px solid var(--border);border-radius:999px;padding:6px 10px;font-size:.9rem}
+  .tag.found{border-color:rgba(132,204,22,.5);color:#d9ffb3}
+  .btn{background:var(--accent);color:#000;border:0;border-radius:10px;padding:12px 14px;font-weight:700;cursor:pointer;transition:transform .06s}
+  .btn:active{transform:translateY(1px)}
+  .btn[disabled]{opacity:.5;cursor:not-allowed}
+  .bar{height:8px;background:#1a1a1a;border:1px solid var(--border);border-radius:99px;overflow:hidden}
+  .bar>i{display:block;height:100%;width:0;background:linear-gradient(90deg,#c7a26d,#e7d7b8);transition:width .25s ease}
+
+  .note{font-size:.95rem;border-left:3px solid rgba(255,255,255,.08);padding-left:10px}
+
+  /* Tooltip (prostokątna chmurka przy kliknięciu) */
+  
+
+  
+
+  /* Snackbar */
+  .snack{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);background:rgba(20,20,20,.86);border:1px solid rgba(255,255,255,.1);color:#fff;padding:10px 14px;border-radius:10px;font-size:14px;display:none;z-index:200}
+  .snack.show{display:block}
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div id="scene" class="scene" aria-label="Scena badania ciała">
+      <img src="images/stacja_cialo.jpg" alt="Stacja benzynowa: mężczyzna leży na podłodze przy kałuży krwi, obok pistolet i dokumenty"/>
+
+      <button class="hotspot" style="left:46%;top:83%;width:11%;height:10%" data-key="gun" aria-label="Pistolet">
+        
+      </button>
+      <button class="hotspot" style="left:28%;top:83%;width:18%;height:12%" data-key="blood" aria-label="Kałuża krwi"></button>
+      <button class="hotspot" style="left:35%;top:64%;width:13%;height:9%" data-key="eyes" aria-label="Twarz z wyrazem przerażenia"></button>
+      <button class="hotspot" style="left:68%;top:30%;width:20%;height:40%" data-key="papers" aria-label="Dokumenty na półce"></button>
+      <button class="hotspot" style="left:15%;top:26%;width:22%;height:52%" data-key="pocket" aria-label="Kieszeń marynarki"></button>
+    </div>
+
+    <aside class="panel" aria-live="polite">
+      <div>
+        <div class="title">Badanie miejsca — wskazówki</div>
+        <div class="bar" aria-hidden="true"><i id="barFill"></i></div>
+      </div>
+
+      <div id="progress" class="progress" role="list" aria-label="Lista tropów"></div>
+
+      <div id="log" class="log" tabindex="0" aria-label="Dziennik obserwacji"></div>
+
+      <div class="note muted">Zbierz <b>5 tropów</b>, aby wyciągnąć wstępny wniosek.</div>
+
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <button id="btnHypo" class="btn" disabled>Wyciągnij wniosek</button>
+        <button id="btnReset" class="btn" style="background:#222;color:#eaeaea">Reset</button>
+      </div>
+
+      <div class="muted" style="font-size:.9rem">Porada: na klawiaturze użyj klawiszy <b>1–5</b>, aby skupić się na kolejnych obszarach.</div>
+    </aside>
+  </div>
+
+  <div id="snack" class="snack">Dodano trop</div>
+
+<script>
+  const CLUES = {
+    gun: {
+      name: 'Pistolet',
+      text: 'Broń leży tuż przy dłoni. Brak widocznych śladów walki w bezpośrednim zasięgu. Odległość i ułożenie sugerują własnoręczny strzał.',
+    },
+    blood: {
+      name: 'Kałuża krwi',
+      text: 'Plama jest rozlana szeroko, ale bez rozprysków typowych dla dynamicznej szarpaniny. Ślady stóp są nieczytelne.',
+    },
+    eyes: {
+      name: 'Twarz / oczy',
+      text: 'Zastygły wyraz: szeroko otwarte oczy, napięte mięśnie żuchwy. Wygląda, jakby <i>coś</i> zobaczył tuż przed śmiercią.',
+    },
+    papers: {
+      name: 'Dokumenty',
+      text: 'Na półce leży pożółkły raport policyjny. Dotyczy zaginięcia Zofii K. w 2003 roku. Raport wspomina o grupie nierozłącznych wychowanków: Sarze, Karolinie, Monice i Sławku (ty).',
+    },
+    pocket: {
+      name: 'Kieszeń marynarki',
+      text: 'W wewnętrznej kieszeni marynarki znajdujesz list. Taki sam, jaki otrzymałeś ty i reszta... To list od Zosi.',
+    },
+  };
+
+  const state = { found: new Set(), log: [] };
+
+  const scene = document.getElementById('scene');
+  const logEl = document.getElementById('log');
+  const progEl = document.getElementById('progress');
+  const barFill = document.getElementById('barFill');
+  const snack = document.getElementById('snack');
+  const btnHypo = document.getElementById('btnHypo');
+  const btnReset = document.getElementById('btnReset');
+
+  function writeLog(html){
+    state.log.push(html);
+    logEl.innerHTML = state.log.map(p=>`<p>${p}</p>`).join('');
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+  function showSnack(msg){ snack.textContent = msg; snack.classList.add('show'); setTimeout(()=>snack.classList.remove('show'), 1400); }
+
+  function redrawProgress(){
+    const total = Object.keys(CLUES).length;
+    const n = state.found.size;
+    barFill.style.width = `${Math.round((n/total)*100)}%`;
+    progEl.innerHTML = Object.entries(CLUES).map(([k,v])=>{
+      const f = state.found.has(k);
+      return `<span class="tag ${f?'found':''}" role="listitem">${v.name}${f?' ✓':''}</span>`
+    }).join('');
+    btnHypo.disabled = n < total; // wymagane wszystkie 5 tropów
+  }
+
+  function registerHotspots(){
+    scene.querySelectorAll('.hotspot').forEach(h => {
+      h.addEventListener('click', ()=> inspect(h.dataset.key, h));
+    });
+  }
+
+  function inspect(key, el){
+    const c = CLUES[key];
+    if(!c) return;
+
+    // zaznacz
+    if(!state.found.has(key)){
+      state.found.add(key);
+      writeLog(`<b>${c.name}:</b> ${c.text}`);
+      showSnack('Dodano trop');
+      el.dataset.found = 'true';
+    } else {
+      writeLog(`<span class="muted">(Ponowna inspekcja) ${c.name} — brak nowych danych.</span>`);
+    }
+
+    redrawProgress();
+  }
+
+  // Tooltip wyłączony
+  function reset(){
+    state.found.clear();
+    state.log = [];
+    logEl.innerHTML = '';
+    scene.querySelectorAll('.hotspot').forEach(h=> h.dataset.found='false');
+    redrawProgress();
+  }
+
+  // Klawiatura: 1–5 -> kolejne hotspoty
+  window.addEventListener('keydown', (e)=>{
+    const idx = parseInt(e.key,10) - 1;
+    const hs = Array.from(scene.querySelectorAll('.hotspot'));
+    if(!isNaN(idx) && hs[idx]){
+      e.preventDefault(); hs[idx].focus(); hs[idx].click();
+    }
+  });
+
+  btnReset.addEventListener('click', reset);
+
+  btnHypo.addEventListener('click', ()=>{
+    const summary = `Zebrane tropy wskazują na <b>samobójstwo</b> (broń, brak śladów walki), ale wyraz twarzy sugeruje, że mężczyzna był przerażony. Znaleziony list i raport policyjny nie pozostawiają złudzeń: on również był w to zamieszany.`;
+
+    writeLog(`<b>Wniosek:</b> ${summary}`);
+
+    // Finał i komunikat do rodzica (jeśli osadzona w iframe)
+    try { window.parent && window.parent.postMessage('bodyExamFinished','*'); } catch(_){}
+
+    btnHypo.textContent = 'Ukończono';
+    btnHypo.disabled = true;
+    showSnack('Wniosek zapisany');
+  });
+
+  // Inicjalizacja
+  registerHotspots();
+  redrawProgress();
+  writeLog('<span class="muted">Zacznij od kliknięcia interesujących obszarów na scenie.</span>');
+</script>
+</body>
+</html>

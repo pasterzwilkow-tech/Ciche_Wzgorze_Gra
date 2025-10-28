@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="color-scheme" content="dark" />
+<title>Ciche Wzgórze — Ścieżka Szeptów</title>
+<link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --bg-color:#000; --text-color:#e2e8f0; --border-color:#44403c;
+    --panel-bg:rgba(12,10,9,0.88); --choice-bg:rgba(41,37,36,0.86);
+    --choice-hover-bg:#c7a26d; --name-narrator:#c7a26d;
+    --name-sara:#a7c7c8; --name-karo:#bda2d9; --name-monika:#d9a2a2;
+  }
+  *{box-sizing:border-box;}
+  html,body{height:100%;margin:0;background:#000;color:var(--text-color);font-family:'Lora',serif;overflow:hidden;}
+  #game-world{position:relative;width:100%;height:100%;}
+  .layer{position:absolute;inset:0}
+
+  #bg-stack{isolation:isolate}
+  .bg{position:absolute;inset:0;background-size:cover;background-position:center;opacity:0;transition:opacity .8s ease-in-out;filter:brightness(.8);}
+  .bg.visible{opacity:1}
+  .fx-layer { transition: background-color 0.5s ease-in-out; }
+
+  #ui-layer{display:flex;flex-direction:column;justify-content:flex-end;align-items:center;padding:20px;pointer-events:none}
+  #text-box{width:100%;max-width:920px;min-height:200px;background:var(--panel-bg);border:1px solid var(--border-color);border-radius:10px;padding:22px 26px;backdrop-filter:blur(3px);margin-bottom:16px;pointer-events:auto}
+  #speaker-name{font-weight:700;font-size:1.05rem;display:block;margin-bottom:10px;color:var(--name-narrator)}
+  #dialogue-text{line-height:1.75;font-size:1.12rem}
+
+  #choices-box{width:100%;max-width:920px;display:flex;flex-direction:column;gap:10px;pointer-events:auto;margin-bottom:10px}
+  .choice-btn{background:var(--choice-bg);border:1px solid var(--border-color);color:var(--text-color);font-size:1.05rem;padding:14px 18px;text-align:left;cursor:pointer;border-radius:8px;transition:all .18s;opacity:0;transform:translateY(8px);animation:choiceIn .3s forwards}
+  .choice-btn:hover{background:var(--choice-hover-bg);color:#000;border-color:var(--choice-hover-bg)}
+  .choice-btn:focus-visible{outline:2px solid var(--choice-hover-bg);outline-offset:2px}
+  @keyframes choiceIn{to{opacity:1;transform:translateY(0)}}
+
+  #final-choice{display:none;position:absolute;bottom:36px;left:50%;transform:translateX(-50%);z-index:50;pointer-events:auto}
+  #final-choice .choice-btn{opacity:1;transform:none}
+</style>
+</head>
+<body>
+  <div id="game-world">
+    <div id="bg-stack" class="layer" aria-hidden="true">
+      <div class="bg visible" id="bgA" style="background-image:url('images/las_wejscie.jpg')"></div>
+      <div class="bg" id="bgB"></div>
+    </div>
+    <div id="fx-layer" class="layer"></div>
+
+    <div id="ui-layer" class="layer">
+      <div id="text-box">
+        <span id="speaker-name">...</span>
+        <p id="dialogue-text" aria-live="polite"></p>
+      </div>
+      <div id="choices-box"></div>
+      <div id="final-choice">
+        <button class="choice-btn" type="button" onclick="location.href='sierociniec.html'">Podejdźcie do sierocińca</button>
+      </div>
+    </div>
+  </div>
+
+  <audio id="music" loop preload="auto"><source src="audio/muzyka_tlo.mp3" type="audio/mpeg"></audio>
+  <audio id="sfx-whisper1" preload="auto"><source src="audio/szept1.mp3"></audio>
+  <audio id="sfx-whisper2" preload="auto"><source src="audio/szept2.mp3"></audio>
+  <audio id="sfx-dig" preload="auto"><source src="audio/kopanie.mp3"></audio>
+  <audio id="sfx-heartbeat" preload="auto" loop><source src="audio/serce.mp3"></audio>
+
+<script>
+/* ===== DOM & ZMIENNE ===== */
+const dialogueTextEl = document.getElementById('dialogue-text');
+const speakerEl = document.getElementById('speaker-name');
+const choicesBoxEl = document.getElementById('choices-box');
+const finalChoice = document.getElementById('final-choice');
+const gameWorld = document.getElementById('game-world');
+const bgA = document.getElementById('bgA');
+const bgB = document.getElementById('bgB');
+const fxLayer = document.getElementById('fx-layer');
+
+let musicStarted = false;
+let triedOtherPath = false;
+const NAME_COLOR = {
+  '…': 'var(--name-narrator)', 'Sara': 'var(--name-sara)', 'Karo': 'var(--name-karo)', 'Monika': 'var(--name-monika)'
+};
+
+/* ===== AUDIO & EFEKTY ===== */
+function startMusicIfNeeded(){
+  if(!musicStarted){
+    const m = document.getElementById('music');
+    if(m) try{ m.volume=0.4; m.play(); } catch(e){}
+    musicStarted = true;
+  }
+}
+function sfx(id, vol=1, loop=false){
+  const a = document.getElementById(id);
+  if(a){
+    try {
+      a.currentTime = 0; a.volume = vol; a.loop = loop; a.play();
+    } catch(e) {}
+  }
+}
+function stopSfx(id){
+  const a = document.getElementById(id);
+  if(a) try { a.pause(); } catch(e) {}
+}
+function flash(color='rgba(255,255,255,0.7)', duration=150){
+  fxLayer.style.backgroundColor = color;
+  setTimeout(()=> fxLayer.style.backgroundColor = 'transparent', duration);
+}
+document.addEventListener('pointerdown', startMusicIfNeeded, { once:true });
+
+/* ===== TŁO & UI ===== */
+let activeBg = 'A';
+function changeBackground(fileName){
+  const next = activeBg === 'A' ? bgB : bgA;
+  const cur  = activeBg === 'A' ? bgA : bgB;
+  const url = `url('images/${fileName}')`;
+  if(next.style.backgroundImage === url && next.classList.contains('visible')) return;
+  next.style.backgroundImage = url;
+  const img = new Image();
+  img.onload = ()=>{ cur.classList.remove('visible'); next.classList.add('visible'); activeBg = activeBg==='A' ? 'B' : 'A'; };
+  img.src = `images/${fileName}`;
+}
+function showDialogue(speaker, text, color='var(--name-narrator)'){
+  speakerEl.textContent = speaker || '…';
+  speakerEl.style.color = color;
+  dialogueTextEl.innerHTML = text || '';
+}
+function showChoices(choices){
+  choicesBoxEl.innerHTML = '';
+  choices.forEach((c,i)=>{
+    const b=document.createElement('button');
+    b.className='choice-btn'; b.type='button';
+    b.textContent=c.text;
+    b.style.animationDelay=`${i*70}ms`;
+    b.addEventListener('click', ()=> c.action && c.action());
+    choicesBoxEl.appendChild(b);
+  });
+}
+
+/* ===== FABUŁA ===== */
+const story = [
+  { s:'…', t:'Ponowne wejście do lasu było jak zanurzenie się w gęstej, zimnej smole. Powietrze momentalnie zgęstniało, tłumiąc dźwięki i przygniatając nas swoim ciężarem.' },
+  { s:'…', t:'Cisza, która tu panowała, nie była zwykłym brakiem hałasu. Była nienaturalna, drapieżna, tętniła złowrogą energią.', action: ()=>sfx('sfx-heartbeat', 0.5, true) },
+  { s:'…', t:'Latarki cięły mrok wąskimi, nerwowymi smugami, ale światło było pożerane przez ciemność zaledwie kilka metrów przed nami.' },
+  { s:'…', t:'Drzewa... Ich konary wykręcały się pod nienaturalnymi kątami, przypominając powykrzywiane w agonii ramiona.' },
+  { action: ()=>sfx('sfx-whisper1', 0.7), s:'…', t:'Nagle w mojej głowie rozległ się szept. To był głos Zosi, tak czysty i bliski, jakby stała tuż za mną: <i>„Dlaczego tak długo?”</i>' },
+  { type:'choice', choices:[
+      { text: 'Rozejrzyj się', action: ()=>jumpTo(6) }
+  ]},
+  { s:'…', t:'Sara szła prosto, jej twarz była kamienną maską, ale widziałem, jak jej palce zaciskają się na latarce z siłą zdolną kruszyć kości.'},
+  { s:'…', t:'Monika szła tuż za nią, z dłońmi przyciśniętymi do uszu, mamrocząc coś pod nosem, jakby odmawiała modlitwę, w którą sama nie wierzyła.'},
+  { s:'…', t:'Tylko Karo, z szeroko otwartymi oczami, rozglądała się wokół z mieszaniną przerażenia i chorej fascynacji.'},
+  { s:'…', t:'Szepty narastały. To już nie były tylko słowa, to były nasze własne lęki i poczucie winy, którym las nadał jej głos.'},
+  { action: ()=>sfx('sfx-whisper2', 0.6), s:'…', t:'<i>„Zimno mi”</i> – usłyszałem i poczułem lodowaty chłód. <i>„Zostawiliście mnie samą”</i> – głos zdawał się oskarżać Sarę. <i>„Myśleliście, że zapomnę?”</i> – ten szept był jak syk, skierowany prosto w ucho Moniki, która krzyknęła krótko.'},
+  { s:'…', t:'W świetle mojej latarki, tuż między drzewami, zamajaczyła jej postać. Stała tam przez ułamek sekundy – mała, w tej samej niebieskiej sukience. Zniknęła.'},
+  { bg:'las_wstazka.png', s:'…', t:'W miejscu, gdzie stała, na gałęzi zawirowała czerwona wstążka, niczym krwawa łza na tle chorej zieleni mchu.'},
+  { s:'…', t:'Potem zobaczyliśmy kolejne. Czerwone wstążki wiły się od drzewa do drzewa, tworząc upiorny szlak. Wyglądały, jakby wyrastały prosto z kory.'},
+  { type:'choice', choices:[
+      { text: 'Podążajcie za wstążkami', action: ()=>jumpTo(17) },
+      { text: 'Spróbujcie iść inną drogą', action: ()=>jumpTo(15), disabled: triedOtherPath }
+  ]},
+  { s:'…', t:'Próbujecie zboczyć ze szlaku, ale po kilku krokach zdajecie sobie sprawę, że las was otacza. Ścieżka za wami znika, a przed wami pojawiają się kolejne wstążki.'},
+  { s:'…', t:'Jesteście zmuszeni podążać wyznaczoną trasą.', action: ()=>{ triedOtherPath = true; jumpTo(14); }},
+  { s:'…', t:'Powietrze stało się cięższe, wypełnił je słodkawy, mdlący zapach palonego wosku i wilgotnej, świeżo wzruszonej ziemi. Szepty ucichły.'},
+  { s:'…', t:'Wstążki doprowadziły was na skraj niewielkiej polany. W jej centrum, spowite w tańczącej mgle, migotało czerwone, drżące światło.'},
+  { bg:'polana_oltarz.jpg', s:'…', t:'Wkroczyliście na polanę, a las za waszymi plecami zamknął się jak paszcza. Migoczące światło pochodziło z kilkunastu czerwonych świec, wetkniętych w niewielki kopiec ziemi na środku.'},
+  { s:'…', t:'Woń topionego wosku mieszała się z ciężkim, słodkawym zapachem gnijących liści i czegoś jeszcze… czegoś metalicznego, co przyprawiało o mdłości.'},
+  { s:'Monika', t:'Nie… Nie możemy. Odwróćmy się i odejdźmy. Proszę.'},
+  { s:'…', t:'Sara stała nieruchomo, wpatrzona w kopiec. W jej oczach nie było już tylko strachu. Pojawiła się w nich jakaś straszliwa, ponura determinacja.'},
+  { s:'…', t:'Ona tu jest – powiedziałem, a mój własny głos wydał mi się obcy. Prawda nie chciała, żebyśmy ją znaleźli. Chciała, żebyśmy ją wykopali własnymi rękami.'},
+  { type:'choice', choices:[
+      { text: '[Klęknij i zacznij kopać]', action: ()=>jumpTo(25) }
+  ]},
+  { action: ()=>{ sfx('sfx-dig', 0.8, true); stopSfx('sfx-heartbeat'); }, s:'…', t:'Bez słowa klęknąłem przy kopcu. Chłodna, wilgotna ziemia oblepiła mi palce. Po chwili wahania dołączyła do mnie Sara. Zaczęliśmy kopać.' },
+  { s:'…', t:'Nagle moje palce natrafiły na coś twardego. Zamarłem. To nie był kamień ani korzeń.'},
+  { s:'…', t:'Powoli, z drżeniem, odgarnąłem ostatnią warstwę ziemi. Z mroku wyłoniła się kość. Mała, cienka i przerażająco biała w czerwonym blasku świec.'},
+  { action: ()=>stopSfx('sfx-dig'), s:'…', t:'To, co ukazało się naszym oczom, było wizją z najgorszego koszmaru. Zmasakrowane, połamane kości dziecka, przemieszane z resztkami butwiejącej materii.'},
+  { s:'…', t:'A potem zobaczyliśmy dłonie. Drobne, dziecięce dłonie, splątane ciasno zardzewiałym drutem kolczastym, który wpił się głęboko, pozostawiając na kościach bruzdy.'},
+  { s:'…', t:'To nie była tylko mogiła. To było świadectwo nienawiści. Brutalna, przerażająca zbrodnia, pogrzebana w sercu lasu.'},
+  { s:'…', t:'Monika w końcu wydała z siebie dźwięk. Nie był to krzyk, ale długi, żałosny skowyt, który przerodził się w spazmatyczny, cichy szloch. Osunęła się na ziemię, obejmując ramionami samą siebie.'},
+  { s:'Monika', t:'Kto... Kto mógł zrobić coś takiego?! To było dziecko... nasze dziecko!'},
+  { s:'…', t:'Sara, która do tej pory była naszą opoką, stała nad grobem z zaciśniętymi ustami. Jedna, pojedyncza łza spłynęła po jej policzku, lśniąc w blasku świecy.'},
+  { s:'…', t:'Najbardziej przerażała mnie reakcja Karo. Nie płakała. Nie krzyczała. Stała nieruchomo, jej szeroko otwarte oczy wpatrywały się w grób z intensywnością, która przyprawiała o dreszcze.'},
+  { s:'Karo', t:'Ten drut... To nie był wypadek. To nienawiść. Ktoś chciał, żeby cierpiała.'},
+  { s:'…', t:'Wściekłość, która uderzyła we mnie w pierwszej chwili, skrystalizowała się w blok lodu w moim żołądku. Patrzyłem na jej drobne dłonie, spętane zardzewiałym drutem, i coś we mnie pękło bezpowrotnie.'},
+  { s:'Monika', t:'Musimy stąd iść! Teraz! Wezwać policję!'},
+  { s:'Sara', t:'I co im powiemy, Monia? Że duch zaprowadził nas do grobu w lesie, w którym nie byliśmy od piętnastu lat? Zamkną nas w wariatkowie, a ten, kto to zrobił, będzie się śmiał.'},
+  { s:'…', t:'Miała rację. List... To nie była pułapka. To było wezwanie. Wskazówka.'},
+  { type:'choice', choices:[
+      { text: '[Pomszczę cię, Zosiu]', action:()=>jumpTo(41) },
+      { text: '[Musimy znaleźć odpowiedzi]', action:()=>jumpTo(41) }
+  ]},
+  { s:'Sara', t:'Ktokolwiek to zrobił... myśli, że zapomnieliśmy. Myśli, że się boimy. List zaprowadził nas tutaj. A prawda... prawda musi być w sierocińcu. Tam znajdziemy odpowiedź. I znajdziemy jego.'},
+  { s:'…', t:'Sara klęknęła i delikatnie, niemal z czułością, zaczęła rękami nagarniać ziemię z powrotem na kości. Nie po to, by ukryć zbrodnię, ale by ofiarować Zosi ostatnią, żałosną namiastkę godności. Dołączyłem do niej.'},
+  { s:'…', t:'Gdy skończyliśmy, odwróciliśmy się od grobu i ruszyliśmy w ciemność. I wtedy zauważyłem, że las się zmienił. Psychodeliczne szepty ucichły. Złowroga wrogość zniknęła.'},
+  { s:'…', t:'Zastąpiła ją cisza tak głęboka i absolutna, że zdawała się mieć własny ciężar. Las pokazał nam to, co chciał pokazać. Teraz stał się milczącym, żałobnym świadkiem.'},
+  { end:true }
+];
+
+/* ===== SILNIK GRY ===== */
+let idx = 0;
+function renderStep(){
+  const s = story[idx];
+  choicesBoxEl.innerHTML = '';
+  if(!s) return;
+  if(s.bg) changeBackground(s.bg);
+  if(s.action) s.action();
+  if(s.type === 'choice'){
+    showDialogue('…','Co robicie?');
+    showChoices(s.choices);
+    return;
+  }
+  if(s.end){
+    showDialogue('…','W oddali, przez rzedniejące drzewa, majaczy mroczna sylwetka waszego celu.');
+    finalChoice.style.display = 'block';
+    return;
+  }
+  const speaker = s.s || '…';
+  const color = NAME_COLOR[speaker] || 'var(--name-narrator)';
+  showDialogue(speaker, s.t, color);
+}
+function nextStep(){
+  if(choicesBoxEl.childElementCount > 0) return;
+  if(idx < story.length-1){ idx++; renderStep(); }
+}
+function jumpTo(i){
+  idx = Math.max(0, Math.min(i, story.length - 1));
+  renderStep();
+}
+gameWorld.addEventListener('click', (e)=>{
+  if (e.target.closest('.choice-btn')) return;
+  nextStep();
+});
+
+renderStep();
+</script>
+</body>
+</html>

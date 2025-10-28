@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Ciche Wzgórze — Wspomnienie Walki</title>
+<link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --bg:#000; --fg:#e2e8f0; --panel:rgba(12,10,9,.9);
+    --border:#44403c; --accent:#c7a26d; --danger:#ef4444; --ok:#22c55e;
+    --monster:#be185d; --muted:#a8a29e; --focus:#93c5fd;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0;background:#000;color:var(--fg);font-family:'Lora',serif}
+  .root{min-height:100vh;display:grid;place-items:center;padding:16px}
+  .card{width:100%;max-width:980px;background:var(--panel);border:1px solid var(--border);border-radius:14px;overflow:hidden}
+
+  /* --- STORY --- */
+  #story-screen{display:grid;grid-template-rows:auto 1fr auto;min-height:60vh}
+  .story-ill{display:flex;align-items:center;justify-content:center;padding:16px;border-bottom:1px solid var(--border); background:#0a0908;}
+  .story-ill img {
+      max-width: 450px;
+      max-height: 300px;
+      width: 100%;
+      height: auto;
+      object-fit: cover;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+  }
+  .story-txt{padding:22px;line-height:1.8;font-size:1.15rem;min-height:160px}
+  .story-cta{display:flex;gap:10px;justify-content:flex-end;padding:16px;border-top:1px solid var(--border)}
+  .btn{background:rgba(41,37,36,.85);color:var(--fg);border:1px solid var(--border);padding:12px 18px;border-radius:10px;cursor:pointer}
+  .btn:hover{background:var(--accent);color:#000}
+  .btn:focus-visible{outline:3px solid var(--focus);outline-offset:2px}
+
+  /* --- BATTLE --- */
+  #battle-screen{display:none;padding:16px}
+  .grid{display:grid;grid-template-columns:1.1fr .9fr;gap:16px}
+  .scene{text-align:center}
+  .scene img{max-width:280px;width:100%;height:auto;filter:drop-shadow(0 0 15px var(--monster))}
+  .stats{grid-column:1/-1;display:grid;grid-template-columns:repeat(4,1fr);gap:8px;border-top:1px solid var(--border);border-bottom:1px solid var(--border);padding:10px 0;margin:8px 0}
+  .pill{border:1px solid var(--border);border-radius:999px;padding:8px 12px;text-align:center}
+  #team-hp{color:var(--ok);font-weight:700} #monster-hp{color:var(--monster);font-weight:700} #sanity-val{color:#fbbf24;font-weight:700}
+  .right{display:grid;grid-template-rows:auto 1fr auto;gap:10px}
+  .dice{min-height:32px;text-align:center;font-weight:700}
+  .log{height:240px;overflow:auto;border:1px solid var(--border);border-radius:8px;padding:10px;background:rgba(0,0,0,.35);scrollbar-width:thin}
+  .log p{margin:2px 0;font-size:.95rem}
+  .ok{color:var(--ok)} .bad{color:var(--danger)} .mon{color:var(--monster)}
+  .actions{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .action{background:rgba(41,37,36,.85);border:1px solid var(--border);color:var(--fg);padding:14px 18px;border-radius:10px;cursor:pointer}
+  .action:disabled{opacity:.55;cursor:not-allowed}
+  .action:hover:not(:disabled){background:var(--accent);color:#000}
+
+  .inv{border:1px solid var(--border);border-radius:8px;padding:8px;background:rgba(0,0,0,.3)}
+  .inv h3{margin:0 0 6px;font-size:1.05em}
+  .inv-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+  .item{border:1px dashed var(--border);border-radius:8px;padding:8px;display:grid;grid-template-columns:1fr auto;gap:6px;align-items:center}
+  .mini{background:rgba(41,37,36,.85);border:1px solid var(--border);color:var(--fg);padding:8px 10px;border-radius:8px;cursor:pointer}
+  .mini:hover{background:var(--accent);color:#000}
+
+  #end{position:fixed;inset:0;background:rgba(0,0,0,.9);display:none;align-items:center;justify-content:center;text-align:center;padding:20px;z-index:10}
+  #end .box{max-width:640px}
+  #end h2{margin:0 0 10px}
+  .tags{display:inline-flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+  .tag{padding:2px 8px;border:1px solid var(--border);border-radius:999px;font-size:.85em}
+
+  @media (max-width:780px){
+    .grid{grid-template-columns:1fr}
+    .stats{grid-template-columns:repeat(2,1fr)}
+    .actions{grid-template-columns:1fr;position:sticky;bottom:0;background:linear-gradient(180deg,rgba(0,0,0,0),rgba(0,0,0,.4));padding-bottom:8px}
+    .log{height:30vh}
+  }
+</style>
+</head>
+<body>
+<div class="root">
+  <div class="card">
+
+    <section id="story-screen" aria-label="Fabuła">
+      <div class="story-ill"><img id="story-image" src="" alt="Wspomnienie"></div>
+      <div class="story-txt" id="story-text"></div>
+      <div class="story-cta">
+        <button class="btn" id="btn-next">Dalej</button>
+      </div>
+    </section>
+
+    <section id="battle-screen" aria-label="Walka z potworem">
+      <div class="grid">
+        <div class="scene"><img src="images/potwor.png" alt="Potwór z wspomnienia" /></div>
+
+        <div class="stats">
+          <div class="pill">Wytrzymałość: <span id="team-hp">5</span></div>
+          <div class="pill">Struktura Cienia: <span id="monster-hp">6</span></div>
+          <div class="pill">Odwaga: <span id="sanity-val">10</span></div>
+          <div class="pill">Wyposażenie: <span id="equipped">–</span></div>
+        </div>
+
+        <div class="left">
+          <div class="inv">
+            <h3>Ekwipunek</h3>
+            <div class="inv-grid" id="inv"></div>
+          </div>
+          <div class="actions">
+            <button class="action" id="a-attack">Rzuć kamieniem</button>
+            <button class="action" id="a-brace">Zasłoń się</button>
+            <button class="action" id="a-calm">Weź oddech</button>
+            <button class="action" id="a-search">Szukaj w poszyciu</button>
+            <button class="action" id="a-use">Użyj przedmiotu</button>
+            <button class="action" id="a-special" disabled>Specjalna akcja</button>
+          </div>
+        </div>
+
+        <div class="right">
+          <div class="dice" id="dice">Wybierz akcję…</div>
+          <div class="log" id="log" role="log" aria-live="polite" aria-relevant="additions">
+          </div>
+          <div style="text-align:center;color:var(--muted)">Skróty: [A] Atak, [R] Gałąź/Specjalna, [S] Szukaj, [Z] Zasłoń się, [U] Użyj, [O] Oddech</div>
+        </div>
+      </div>
+    </section>
+
+    <div id="end">
+      <div class="box">
+        <h2 id="end-title"></h2>
+        <p id="end-msg"></p>
+        <div class="tags" id="end-tags"></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<template id="tpl-item">
+  <div class="item">
+    <div>
+      <div class="name"></div>
+      <small class="meta"></small>
+    </div>
+    <div>
+      <button class="mini equip">Wyposaż</button>
+      <button class="mini use">Użyj</button>
+      <button class="mini drop">Upuść</button>
+    </div>
+  </div>
+</template>
+
+<script>
+/* ============ 1) FABUŁA — liniowe slajdy ============ */
+const story = [
+    { text: 'Sierociniec był klatką. Ściany miały uszy, a cisza była głośniejsza niż krzyki. Las był jedyną ucieczką.', img: 'images/wspomnienie_sierociniec.png' },
+    { text: 'Znałem tę ścieżkę na pamięć. Ale tego dnia las się zmienił. Drzewa przestawiły się, zamykając drogę powrotną. Zgubiłem się.', img: 'images/wspomnienie_las_zagubiony.png' },
+    { text: 'Z początku był to tylko szum liści. Potem usłyszałem głos, zimny jak ziemia. Szeptał moje imię.', img: 'images/wspomnienie_szept.jpg' },
+    { text: 'Z mroku, spomiędzy pni, wypełzł cień. Nie miał twarzy, tylko głód w miejscu, gdzie powinny być oczy. Strach kazał uciekać, ale nogi wrosły w ziemię. Chwyciłem za ciężką, mokrą gałąź.', img: 'images/wspomnienie_cien.jpg' },
+    { text: 'To nie była walka o życie. To była walka o to, by nie dać się pożreć ciemności. Wspomnienie boli. Rana wciąż jest otwarta.', img: 'images/potwor.png' }
+];
+
+let sIdx = 0;
+const $story = {
+  screen: document.getElementById('story-screen'),
+  image: document.getElementById('story-image'),
+  text: document.getElementById('story-text'),
+  next: document.getElementById('btn-next'),
+};
+
+function renderStory(){
+  const currentSlide = story[sIdx];
+  $story.text.innerHTML = currentSlide.text;
+  $story.image.src = currentSlide.img;
+  $story.next.textContent = (sIdx === story.length - 1) ? 'Walcz o przetrwanie...' : 'Dalej';
+}
+
+$story.next.addEventListener('click', () => {
+  if (sIdx < story.length - 1){ sIdx++; renderStory(); }
+  else startBattle();
+});
+
+renderStory();
+
+/* ============ 2) WALKA — prosty, stabilny core ============ */
+const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
+const d6 = () => (Math.random()*6|0)+1;
+
+const el = {
+  battle: document.getElementById('battle-screen'),
+  story: document.getElementById('story-screen'),
+  log: document.getElementById('log'),
+  dice: document.getElementById('dice'),
+  team: document.getElementById('team-hp'),
+  mon: document.getElementById('monster-hp'),
+  san: document.getElementById('sanity-val'),
+  eq: document.getElementById('equipped'),
+  inv: document.getElementById('inv'),
+  end: document.getElementById('end'),
+  endTitle: document.getElementById('end-title'),
+  endMsg: document.getElementById('end-msg'),
+  endTags: document.getElementById('end-tags'),
+  btns: {
+    attack: document.getElementById('a-attack'),
+    brace:  document.getElementById('a-brace'),
+    calm:   document.getElementById('a-calm'),
+    search: document.getElementById('a-search'),
+    use:    document.getElementById('a-use'),
+    spec:   document.getElementById('a-special'),
+  }
+};
+
+const ITEMS = {
+  branch: { id:'branch', name:'Gruba gałąź', type:'weapon', uses:5, desc:'Odblokowuje „Mocny zamach”.', onUse:null },
+  herbs: { id:'herbs', name:'Leśne zioła', type:'consumable', uses:1, desc:'+3 Wytrzymałości (max 8).', onUse(){ st.team = clamp(st.team+3,0,8); log('Gorzki smak przynosi ulgę. +3 Wytrzymałości.','ok'); } },
+  stone: { id:'stone', name:'Ostry kamień', type:'throwable', uses:2, desc:'Odwraza uwagę Cienia.', onUse(){ st.debuff='distracted'; log('Kamień uderza w drzewo. Cień na chwilę odwraca wzrok.','ok'); } }
+};
+
+const st = {
+  team:5, mon:6, san:10, ended:false, playerTurn:true, brace:false, debuff:null,
+  inv:[], eq:null, tags:new Set()
+};
+
+function showBattleUI(on){
+  el.battle.style.display = on ? 'block' : 'none';
+  el.story.style.display  = on ? 'none'  : 'grid';
+}
+
+function startBattle(){
+  showBattleUI(true);
+  if(Math.random()<.5) give('branch');
+  update();
+  log('Wspomnienie powraca z całą mocą. Jesteś znowu małym, przerażonym chłopcem.','mon');
+  log('Cień bez twarzy pełznie w twoją stronę. Oddycha twoim strachem.','mon');
+}
+
+function log(t,kind){ const p=document.createElement('p'); if(kind==='ok')p.className='ok'; if(kind==='bad')p.className='bad'; if(kind==='mon')p.className='mon'; p.innerHTML=t; el.log.appendChild(p); el.log.scrollTop=el.log.scrollHeight; }
+function update(){
+  st.team=clamp(st.team,0,99); st.mon=clamp(st.mon,0,99); st.san=clamp(st.san,0,10);
+  el.team.textContent=st.team; el.mon.textContent=st.mon; el.san.textContent=st.san;
+  el.eq.textContent=st.eq? (ITEMS[st.eq]?.name||'–') : '–';
+  el.inv.innerHTML='';
+  st.inv.forEach(it=>{
+    const n=document.getElementById('tpl-item').content.firstElementChild.cloneNode(true);
+    n.querySelector('.name').textContent = `${it.name} ${it.type==='weapon'?'⚔️':it.type==='consumable'?'🌿':'🪨'}`;
+    n.querySelector('.meta').textContent = `${it.desc} • Użycia: ${it.uses}`;
+    n.querySelector('.equip').onclick = ()=>equip(it.id);
+    n.querySelector('.use').onclick   = ()=>useItem(it.id);
+    n.querySelector('.drop').onclick  = ()=>drop(it.id);
+    if(it.type!=='weapon') n.querySelector('.equip').disabled=true;
+    if(it.uses<=0) n.querySelector('.use').disabled=true;
+    el.inv.appendChild(n);
+  });
+  el.btns.spec.disabled = st.eq!=='branch';
+  el.btns.spec.textContent = st.eq === 'branch' ? 'Mocny zamach' : 'Specjalna akcja';
+
+  if(!st.ended && (st.team<=0 || st.san<=0)) return end(false, st.san<=0?'odwagę':'wytrzymałość');
+  if(!st.ended && st.mon<=0) return end(true);
+}
+
+function give(key){
+  const base=ITEMS[key]; if(!base) return;
+  const ex=st.inv.find(i=>i.id===key);
+  if(ex) ex.uses += Math.max(1, base.uses||1); else st.inv.push({...base});
+  log(`<b>Znaleziono:</b> ${base.name}`,'ok');
+  update();
+}
+function equip(id){
+  const it=st.inv.find(i=>i.id===id); if(!it||it.type!=='weapon') return log('Tego nie da się wyposażyć.');
+  st.eq=id; log(`<b>Wyposażono:</b> ${it.name}`);
+  update();
+}
+function drop(id){
+  const i=st.inv.findIndex(x=>x.id===id); if(i<0) return;
+  const [it]=st.inv.splice(i,1); if(st.eq===it.id) st.eq=null;
+  log(`Upuszczono: ${it.name}.`); update();
+}
+function useItem(id){
+  const it=st.inv.find(i=>i.id===id); if(!it||it.uses<=0) return log('Przedmiot zużyty.');
+  it.uses--; const def=ITEMS[id]; if(def?.onUse) def.onUse();
+  if(it.uses<=0){ log(`${it.name} zużyty do końca.`,'bad'); if(st.eq===id) st.eq=null; }
+  update();
+}
+
+// --- ZMIANA: Dodano automatyczne przekierowanie po 4 sekundach ---
+function end(win, why=''){
+  st.ended=true; disableAll(true);
+  el.end.style.display='flex';
+  if(win){
+    el.endTitle.textContent='PRZETRWANIE';
+    el.endTitle.style.color='var(--ok)';
+    el.endMsg.innerHTML='Cień rozpada się, wrzeszcząc bezgłośnie. Udaje ci się odepchnąć wspomnienie. Budzisz się, zlany potem. Jesteś dorosły. I wiesz, co musisz zrobić.';
+    renderTags(['Przetrwanie','Odwaga']);
+  }else{
+    el.endTitle.textContent='UPADEK';
+    el.endTitle.style.color='var(--danger)';
+    el.endMsg.innerHTML = (why==='odwagę')
+      ? 'Szepty stają się zbyt głośne. Las wiruje. Jesteś tylko zagubionym chłopcem, który już nigdy nie odnajdzie drogi do domu.'
+      : 'Gałąź wypada ci z rąk. Cień pochyla się nad tobą, a jego zimno przenika cię do kości. Ciemność cię pochłania. Wspomnienie wygrywa.';
+    renderTags(['Porażka', `Straciłeś ${why}` ]);
+  }
+
+  setTimeout(() => {
+      // Ta komenda "mówi" do pliku pursuit.html: "Minigra skończona!"
+      window.parent.postMessage('minigameFinished', '*');
+  }, 4000);
+}
+
+function renderTags(arr){ el.endTags.innerHTML=''; arr.filter(Boolean).forEach(t=>{const s=document.createElement('span');s.className='tag';s.textContent=t;el.endTags.appendChild(s);}); }
+
+function disableAll(on){
+  Object.values(el.btns).forEach(b=>b.disabled=on || (b===el.btns.spec && st.eq!=='branch'));
+}
+
+function playerGuard(cb){ if(st.ended || !st.playerTurn) return; cb(); }
+
+function actAttack(){ playerGuard(()=>{
+  log('Zaciskasz dłoń na kamieniu i rzucasz.');
+  const r=d6(); el.dice.textContent=`Rzut: ${r}`;
+  if(r>=4){ st.mon = clamp(st.mon-1,0,99); log('SUKCES! Cień chwieje się. -1 do struktury.','ok');}
+  else { st.team = clamp(st.team-1,0,99); log('PORAŻKA! Cień uderza z zaskoczenia. -1 Wytrzymałości.','bad'); sanityTick(); }
+  endPlayerTurn();
+});}
+
+function actBrace(){ playerGuard(()=>{
+  log('Zasłaniasz się ramionami, kuląc się w sobie.');
+  const r=d6(); el.dice.textContent=`Rzut: ${r}`;
+  if(r>=3){ st.brace=true; log('Następny atak zada o 1 mniej.','ok'); }
+  else log('Strach paraliżuje. Nie zdążyłeś.','bad');
+  endPlayerTurn();
+});}
+
+function actCalm(){ playerGuard(()=>{
+  log('Zaciskasz powieki, próbując odgonić strach.');
+  const r=d6(); el.dice.textContent=`Rzut: ${r}`;
+  if(r>=4){ st.san=clamp(st.san+2,0,10); log(`"To tylko zły sen..." +2 Odwagi.`,'ok'); }
+  else { log('Szepty stają się głośniejsze.','bad'); sanityTick(); }
+  endPlayerTurn();
+});}
+
+function actSearch(){ playerGuard(()=>{
+  log('Gorączkowo przeszukujesz leśne poszycie...');
+  const r=d6(); el.dice.textContent=`Rzut: ${r}`;
+  if(r>=5){ const table=['branch','herbs','stone']; give(table[Math.random()*table.length|0]); }
+  else if(r>=3) log('Tylko mokre liście i błoto.');
+  else { st.team=clamp(st.team-1,0,99); log('Potykasz się o korzeń! -1 Wytrzymałości.','bad'); sanityTick(); }
+  endPlayerTurn();
+});}
+
+function actUse(){ playerGuard(()=>{
+    const auto = st.inv.find(i=>['herbs','stone'].includes(i.id) && i.uses>0);
+    if(auto) useItem(auto.id); else log('Nie masz nic, czego mógłbyś użyć.');
+  endPlayerTurn();
+});}
+
+function actSpecial(){ playerGuard(()=>{
+  if(st.eq!=='branch') return;
+  const r=d6(); el.dice.textContent=`Zamach gałęzią — rzut: ${r}`;
+  log('Bierzesz zamach, drewno świszcze w powietrzu.');
+  const w=st.inv.find(i=>i.id==='branch'); if(w) w.uses = clamp(w.uses-1,0,99);
+  if(r>=3){ st.mon=clamp(st.mon-2,0,99); log('TRAFIENIE! Cień cofa się z niemym sykiem. -2 do struktury.','ok'); }
+  else { st.team=clamp(st.team-1,0,99); log(`Chybiasz! Cień jest za szybki! Kontratak: -1.`,'bad'); sanityTick(); }
+  if(w && w.uses<=0){ log('Gałąź pęka i rozpada się w dłoniach.','bad'); drop('branch'); }
+  endPlayerTurn();
+});}
+
+function endPlayerTurn(){
+  update();
+  if(st.ended) return;
+  if(st.team>0 && st.mon>0 && st.san>0){
+    st.playerTurn=false; disableAll(true);
+    setTimeout(monsterTurn, 900);
+  }
+}
+
+function monsterTurn(){
+  if(st.ended) return;
+  el.dice.textContent='Cień atakuje…';
+  let dmgMod=0;
+  if(st.brace){ dmgMod--; st.brace=false; log('Zasłona częściowo cię chroni.','ok'); }
+  if(st.debuff==='distracted'){ dmgMod--; }
+
+  const r=d6();
+  if(r<=3){
+    const dmg=Math.max(0,1+dmgMod);
+    log('Mroczne macki smagają twoje ramię.','mon');
+    if(dmg>0){ st.team=clamp(st.team-dmg,0,99); log(`Ból jest zimny i ostry. -${dmg} Wytrzymałości.`,'bad'); }
+  } else {
+    log('Szept wdziera się prosto do twojej głowy.','mon');
+    st.san=clamp(st.san-2,0,10);
+  }
+  st.debuff=null;
+  st.playerTurn=true; update();
+  if(!st.ended && st.team>0 && st.mon>0 && st.san>0){
+    setTimeout(()=>{ if(st.ended) return;
+      el.dice.textContent='Twoja kolej…';
+      disableAll(false);
+    }, 600);
+  }
+}
+
+function sanityTick(){
+  st.san = clamp(st.san-1,0,10);
+  log('Strach zaciska ci gardło. -1 Odwagi.','bad');
+  update();
+}
+
+/* ======= BINDY ======= */
+el.btns.attack.onclick = actAttack;
+el.btns.brace.onclick  = actBrace;
+el.btns.calm.onclick   = actCalm;
+el.btns.search.onclick = actSearch;
+el.btns.use.onclick    = actUse;
+el.btns.spec.onclick   = actSpecial;
+
+window.addEventListener('keydown', (e)=>{
+  if(!st.playerTurn || st.ended || el.battle.style.display!=='block') return;
+  const k=e.key.toLowerCase();
+  if(k==='a') return actAttack();
+  if(k==='z') return actBrace();
+  if(k==='o') return actCalm();
+  if(k==='s') return actSearch();
+  if(k==='u') return actUse();
+  if(k==='r') return actSpecial();
+}, {passive:true});
+</script>
+</body>
+</html>

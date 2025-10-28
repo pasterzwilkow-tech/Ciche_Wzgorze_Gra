@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Ciche Wzgórze — Ulica (VN)</title>
+<link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg-color: #000;
+    --text-color: #e2e8f0;
+    --border-color: #44403c;
+    --panel-bg: rgba(12, 10, 9, 0.9);
+    --choice-bg: rgba(41, 37, 36, 0.8);
+    --choice-hover-bg: #c7a26d;
+    --name-narrator: #c7a26d;
+  }
+  * { box-sizing: border-box; }
+  html, body { height:100%; margin:0; font-family:'Lora', serif; background:#000; color:var(--text-color); overflow:hidden; }
+
+  #game-world { position:relative; width:100%; height:100%; background-color:#000; }
+  .layer { position:absolute; inset:0; background-size:cover; background-position:center; transition: opacity 1.2s ease-in-out, background-image 1s ease-in-out; }
+  #background-layer { background-image:url('images/ulica_mgla.png'); }
+
+  #ui-layer { display:flex; flex-direction:column; justify-content:flex-end; align-items:center; padding:20px; }
+  #text-box { width:100%; max-width:900px; min-height:180px; background:var(--panel-bg); border:1px solid var(--border-color); border-radius:8px; padding:25px 30px; backdrop-filter: blur(3px); margin-bottom:20px; }
+  #speaker-name { font-weight:bold; font-size:1.2em; display:block; margin-bottom:12px; color:var(--name-narrator); }
+  #dialogue-text { line-height:1.8; font-size:1.15em; }
+  #choices-box { width:100%; max-width:900px; display:flex; flex-direction:column; gap:10px; }
+  .choice-btn { background:var(--choice-bg); border:1px solid var(--border-color); color:var(--text-color); font-family:'Lora', serif; font-size:1.05em; padding:14px 18px; text-align:left; cursor:pointer; border-radius:6px; transition:all .2s; opacity:0; transform:translateY(10px); animation:slideUp .4s forwards; }
+  .choice-btn:hover{ background:var(--choice-hover-bg); color:#000; border-color:var(--choice-hover-bg); }
+  @keyframes slideUp { to { opacity:1; transform:translateY(0); } }
+  
+  /* Usunięto #final-choice */
+
+  /* Overlay telefonu */
+  .overlay { position:fixed; inset:0; z-index:100; display:none; align-items:center; justify-content:center; background:rgba(0,0,0,.85); }
+  .overlay.visible { display:flex; }
+  .phone-box { width:min(420px, 95vw); height:min(780px, 90vh); background:#0b0b0b; border:1px solid #222; border-radius:16px; box-shadow:0 0 30px rgba(0,0,0,.6); overflow:hidden; position:relative; }
+  .phone-header { position:absolute; inset:0 0 auto 0; height:44px; background:rgba(255,255,255,.04); border-bottom:1px solid rgba(255,255,255,.08); display:flex; align-items:center; justify-content:space-between; padding:0 10px; }
+  .phone-header span { font-size:13px; color:#cbd5e1; }
+  .phone-header button { background:#151515; border:1px solid #2a2a2a; color:#e5e5e5; border-radius:8px; padding:6px 10px; cursor:pointer; }
+  .phone-iframe { position:absolute; inset:44px 0 0 0; width:100%; height:calc(100% - 44px); border:0; background:#000; }
+
+  /* Snack (powiadomienie) */
+  #snack { position:fixed; left:50%; bottom:18px; transform:translateX(-50%); background:rgba(20,20,20,.86); border:1px solid rgba(255,255,255,.1); color:#eaeaea; padding:10px 14px; border-radius:10px; font-size:14px; display:none; z-index:200; }
+  #snack.show { display:block; }
+</style>
+</head>
+<body>
+  <div id="game-world">
+    <div id="background-layer" class="layer"></div>
+
+    <div id="ui-layer" class="layer">
+      <div id="text-box">
+        <span id="speaker-name">...</span>
+        <p id="dialogue-text"></p>
+      </div>
+      <div id="choices-box"></div>
+      </div>
+
+    <div id="phone-overlay" class="overlay" aria-hidden="true">
+      <div class="phone-box">
+        <div class="phone-header">
+          <span>Telefon — połącz z resztą</span>
+          <button onclick="closePhone()">Zamknij</button>
+        </div>
+        <iframe id="phone-frame" class="phone-iframe" src="about:blank" title="Minigra Telefon"></iframe>
+      </div>
+    </div>
+  </div>
+
+  <div id="snack"></div>
+  <audio id="music" loop>
+    <source src="audio/horror2.mp3" type="audio/mpeg">
+  </audio>
+
+<script>
+  const dialogueTextEl = document.getElementById('dialogue-text');
+  const speakerEl = document.getElementById('speaker-name');
+  const choicesBoxEl = document.getElementById('choices-box');
+  const backgroundLayer = document.getElementById('background-layer');
+  // Usunięto referencję do finalChoice
+
+  let musicStarted=false;
+  function startMusicIfNeeded(){
+    if(!musicStarted){
+      const m=document.getElementById('music');
+      if(m){ try{ m.volume=0.6; m.play(); }catch(e){} }
+      musicStarted=true;
+    }
+  }
+  document.addEventListener('pointerdown', startMusicIfNeeded, { once:true });
+
+  function setBg(name){ backgroundLayer.style.backgroundImage = `url('images/${name}')`; }
+  function showText(html){ speakerEl.textContent = '...'; dialogueTextEl.innerHTML = html; }
+  function showChoices(choices){
+    choicesBoxEl.innerHTML = '';
+    choices.forEach((c,i)=>{
+      if (c.condition && !c.condition()) return;
+      const b=document.createElement('button');
+      b.className='choice-btn';
+      b.textContent=c.text;
+      b.style.animationDelay=`${i*100}ms`;
+      b.onclick=()=>{ 
+        startMusicIfNeeded();
+        choicesBoxEl.innerHTML=''; 
+        c.action(); 
+      };
+      choicesBoxEl.appendChild(b);
+    });
+  }
+
+  let phoneOpen = false;
+  let phoneFinished = false;
+
+  function showSnack(msg){
+    const snack = document.getElementById('snack');
+    if(!snack) return;
+    snack.innerHTML = msg;
+    snack.classList.add('show');
+    setTimeout(()=> snack.classList.remove('show'), 2000);
+  }
+
+  function openPhone(){
+    const ov=document.getElementById('phone-overlay');
+    const fr=document.getElementById('phone-frame');
+
+    phoneOpen = true;
+    phoneFinished = false;
+
+    fr.src='phone.html';
+    ov.classList.add('visible');
+  }
+
+  // --- ZMIANA: Dodano automatyczne przejście po zamknięciu okna ---
+  function closePhone(){
+    if (!phoneFinished) {
+      showSnack('Najpierw zakończ rozmowę w telefonie.');
+      return;
+    }
+    const ov=document.getElementById('phone-overlay');
+    const fr=document.getElementById('phone-frame');
+
+    ov.classList.remove('visible');
+    fr.src='about:blank';
+    phoneOpen = false;
+
+    // Automatyczne przejście do następnego pliku po 3 sekundach
+    setTimeout(() => {
+      window.location.href = 'gas_station.html';
+    }, 3000);
+  }
+  // --- KONIEC ZMIANY ---
+
+  window.addEventListener('message', (e)=>{
+    if (e.data === 'phoneMinigameFinished') {
+      phoneFinished = true;
+      // Po zakończeniu minigry w telefonie, automatycznie ją zamykamy
+      closePhone(); 
+    }
+  });
+
+  const G = { cleanerTalked:false, ate:false, backHome:false, phoneUsed:false };
+
+  const scenes = {
+    start:()=>{
+      setBg('ulica_mgla.png');
+      showText('Wychodzisz na zewnątrz. Chłodne, wilgotne powietrze uderza w twarz. Sprzątaczka krząta się przy <i>przewróconym koszu</i> przed kamienicą.');
+      showChoices([
+        {text:'Podejdź do sprzątaczki', action:scenes.cleaner},
+        {text:'Rozejrzyj się', action:scenes.look}
+      ]);
+    },
+    look:()=>{
+      showText('Ulica jest pusta, spowita lekką mgłą. Poza sprzątaczką nie widać żywej duszy.');
+      showChoices([
+        {text:'Podejdź do sprzątaczki', action:scenes.cleaner}
+      ]);
+    },
+    cleaner:()=>{
+      setBg('ulica_kosz.png');
+      if(!G.cleanerTalked){
+        showText('Kobieta prostuje się i patrzy na ciebie nieufnie. — „Znowu ktoś się tu kręci… Czego pan szuka?”');
+        showChoices([
+          {text:'Zapytaj, czy kogoś widziała', action:scenes.cleanerInfo}
+        ]);
+      } else {
+        showText('— „Nic więcej nie wiem, naprawdę. Daj mi pan pracować.”');
+        showChoices([
+          {text:'Idź do baru „Ostatnia Szansa”', action:scenes.bar}
+        ]);
+      }
+    },
+    cleanerInfo:()=>{
+      G.cleanerTalked=true;
+      showText('Kobieta wzdycha. — „Był tu przed panem taki jeden, bardzo nerwowy. Wypytywał o pana, nazwisko nawet znał. I o jakichś pana znajomych... ale ja tam nikogo nie znam. Wyglądał, jakby ducha zobaczył, a potem poleciał w stronę starego dworca.” <br><br>Ta informacja sprawia, że czujesz nieprzyjemny skręt w żołądku. Uświadamiasz sobie, że od wczoraj nic nie jadłeś. Musisz coś zjeść, żeby zebrać myśli.');
+      showChoices([
+        {text:'Idź do baru „Ostatnia Szansa”', action:scenes.bar}
+      ]);
+    },
+    bar:()=>{
+      setBg('bar_wnetrze.png');
+      showText('Wnętrze baru jest prawie puste. Siadasz przy ladzie. Barman bez słowa stawia jajecznicę i kubek czarnej kawy.');
+      showChoices([
+        {text:'Zjedz posiłek', action:scenes.eat}
+      ]);
+    },
+    eat:()=>{
+      G.ate=true;
+      showText('Ciepło posiłku rozchodzi się po ciele, ale nie przynosi ulgi. List. Sen. Tajemniczy mężczyzna. To wszystko dzieje się naprawdę. Musisz zadzwonić do reszty.');
+      showChoices([
+        {text:'Wróć do mieszkania po telefon', action:scenes.backHome}
+      ]);
+    },
+    backHome:()=>{
+      G.backHome=true;
+      setBg('pokoj_jasny.png');
+      showText('Wracasz na górę. W mieszkaniu panuje cisza. Na stoliku leży twój telefon.');
+      showChoices([
+        {text:'Weź telefon i zadzwoń', action:scenes.phone}
+      ]);
+    },
+    phone:()=>{
+      G.phoneUsed=true;
+      openPhone();
+      showText('Po zakończonej rozmowie, wychodzisz na zewnątrz. Niemal natychmiast, zza rogu wyłania się znajomy samochód i zatrzymuje tuż obok ciebie.');
+      showChoices([]);
+    }
+  };
+
+  scenes.start();
+</script>
+</body>
+</html>

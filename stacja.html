@@ -1,0 +1,396 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="color-scheme" content="dark" />
+<title>Ciche Wzgórze — Stacja</title>
+<link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --bg-color:#000; --text-color:#e2e8f0; --border-color:#44403c;
+    --panel-bg:rgba(12,10,9,0.88); --choice-bg:rgba(41,37,36,0.86);
+    --choice-hover-bg:#c7a26d; --name-narrator:#c7a26d;
+    --name-sara:#a7c7c8; --name-karo:#bda2d9; --name-monika:#d9a2a2;
+  }
+  *{box-sizing:border-box;}
+  html,body{height:100%;margin:0;background:#000;color:var(--text-color);font-family:'Lora',serif;overflow:hidden;}
+  #game-world{position:relative;width:100%;height:100%;}
+  .layer{position:absolute;inset:0}
+
+  /* Tła: double-buffer do miękkiego cross-fade */
+  #bg-stack{isolation:isolate}
+  .bg{position:absolute;inset:0;background-size:cover;background-position:center;opacity:0;transition:opacity .6s ease-in-out;filter:brightness(.9);}
+  .bg.visible{opacity:1}
+
+  /* UI */
+  #ui-layer{display:flex;flex-direction:column;justify-content:flex-end;align-items:center;padding:20px;pointer-events:none}
+  #text-box{width:100%;max-width:920px;min-height:200px;background:var(--panel-bg);border:1px solid var(--border-color);border-radius:10px;padding:22px 26px;backdrop-filter:blur(3px);margin-bottom:16px;pointer-events:auto}
+  #speaker-name{font-weight:700;font-size:1.05rem;display:block;margin-bottom:10px;color:var(--name-narrator)}
+  #dialogue-text{line-height:1.75;font-size:1.12rem}
+
+  #choices-box{width:100%;max-width:920px;display:flex;flex-direction:column;gap:10px;pointer-events:auto;margin-bottom:10px}
+  .choice-btn{background:var(--choice-bg);border:1px solid var(--border-color);color:var(--text-color);font-size:1.05rem;padding:14px 18px;text-align:left;cursor:pointer;border-radius:8px;transition:all .18s;opacity:0;transform:translateY(8px);animation:choiceIn .3s forwards}
+  .choice-btn:hover{background:var(--choice-hover-bg);color:#000;border-color:var(--choice-hover-bg)}
+  .choice-btn:focus-visible{outline:2px solid var(--choice-hover-bg);outline-offset:2px}
+  @keyframes choiceIn{to{opacity:1;transform:translateY(0)}}
+
+  #final-choice{display:none;position:absolute;bottom:36px;left:50%;transform:translateX(-50%);z-index:50;pointer-events:auto}
+  #final-choice .choice-btn{opacity:1;transform:none}
+
+  /* Overlay (wspólne) */
+  .overlay{position:fixed;inset:0;background:rgba(0,0,0,.85);display:none;align-items:center;justify-content:center;z-index:100}
+  .overlay.visible{display:flex}
+
+  /* Overlay artykułu */
+  .document{width:min(90vw,760px);max-height:90vh;background-image:url('images/papier.png');background-color:#e5ded1;color:#333;padding:28px 36px;border:1px solid #777;box-shadow:0 0 30px #000;overflow-y:auto;font-family:'Times New Roman',serif}
+  .document h2{text-align:center;font-size:1.35rem;border-bottom:1px solid #aaa;padding-bottom:10px;margin-bottom:12px}
+  .document p{line-height:1.8;font-size:1.05rem;text-align:justify}
+  .hint{text-align:center;font-style:italic;margin-top:18px;color:#444}
+
+  /* Overlay minigry */
+  .exam-wrap{width:min(92vw,980px);max-height:92vh;background:#0b0b0b;border:1px solid #2a2a2a;border-radius:12px;box-shadow:0 0 30px #000;overflow:hidden;display:flex;flex-direction:column}
+  .exam-head{display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:rgba(255,255,255,.04);border-bottom:1px solid rgba(255,255,255,.08)}
+  .exam-head span{font-size:13px;color:#cbd5e1}
+  .exam-head button{background:#151515;border:1px solid #2a2a2a;color:#e5e5e5;border-radius:8px;padding:6px 10px;cursor:pointer}
+  .exam-frame{width:100%;height:70vh;border:0;background:#000}
+</style>
+</head>
+<body>
+  <div id="game-world">
+    <div id="bg-stack" class="layer" aria-hidden="true">
+      <div class="bg visible" id="bgA" style="background-image:url('images/droga_za_szlabanem.png')"></div>
+      <div class="bg" id="bgB"></div>
+    </div>
+
+    <div id="ui-layer" class="layer">
+      <div id="text-box">
+        <span id="speaker-name">...</span>
+        <p id="dialogue-text" aria-live="polite"></p>
+      </div>
+      <div id="choices-box"></div>
+      <div id="final-choice">
+        <button class="choice-btn" type="button" onclick="location.href='las.html'">Idź w głąb lasu, do waszego miejsca</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="article-overlay" class="overlay" role="dialog" aria-modal="true" aria-label="Raport Policyjny dot. zaginięcia Zofii K.">
+    <div class="document">
+        <h2>SPRAWA KRZ – 41/03. ZAGINIĘCIE ZOFII K.</h2>
+        <p>
+            <b>DATA ZDARZENIA:</b> 28.07.2003<br>
+            <b>STATUS:</b> Uznana za nierozwiązaną.
+        </p>
+        <p>
+            <b>PODSUMOWANIE:</b> Poszukiwania prowadzone w rejonie Sierocińca „Ciche Wzgórze” i okolicznego lasu, w tym zasypanych szybów kopalni „Nadzieja”. Trop psów tropiących utracony w pobliżu ogrodzenia placówki. Znaleziono czerwoną wstążkę na gałęzi.
+        </p>
+        <p>
+            <b>KLUCZOWI ŚWIADKOWIE (WYCHOWANKOWIE):</b><br>
+            - S. (Sara): Odmówiła współpracy. Stan głębokiego szoku. Kilka sprzecznych zeznań o „głosach w lesie”.<br>
+            - K. (Karo): Bardzo zamknięta. Sugerowała, że to „Dyrektorka Maria S. wiedziała co się stało”.<br>
+            - M. (Monika): Zorganizowana i opanowana. Wykazywała zbyt dużą wiedzę o procedurach poszukiwawczych. Zapewniła grupie alibi na kluczową noc.<br>
+            - S. (Sławek): Brak konkretnego alibi. W zeznaniach pojawia się motyw „poświęcenia” i winy.
+        </p>
+        <p>
+            <b>WNIOSKI:</b> Brak dowodów fizycznych. Istnieje silne podejrzenie o ukrywanie informacji przez grupę wychowanków. Postępowanie zamknięte ze względu na brak możliwości dowodowych.
+        </p>
+        <p class="hint">(Kliknij poza dokumentem lub naciśnij Esc, aby zamknąć)</p>
+    </div>
+</div>
+
+  <div id="exam-overlay" class="overlay" role="dialog" aria-modal="true" aria-label="Badanie ciała">
+    <div class="exam-wrap">
+      <div class="exam-head">
+        <span>Badanie ciała — zbierz tropy</span>
+        <button id="exam-close" type="button">Zamknij</button>
+      </div>
+      <iframe id="exam-frame" class="exam-frame" src="about:blank" title="Minigra: badanie ciała"></iframe>
+    </div>
+  </div>
+
+  <audio id="music" loop preload="none"><source src="audio/muzyka_tlo.mp3" type="audio/mpeg"></audio>
+  <audio id="sfx-gunshot" preload="none"><source src="audio/wystrzal.mp3" type="audio/mpeg"></audio>
+  <audio id="sfx-creak" preload="none"><source src="audio/drzwi.mp3" type="audio/mpeg"></audio>
+
+<script>
+/* ===== DOM ===== */
+const dialogueTextEl = document.getElementById('dialogue-text');
+const speakerEl = document.getElementById('speaker-name');
+const choicesBoxEl = document.getElementById('choices-box');
+const finalChoice = document.getElementById('final-choice');
+const gameWorld = document.getElementById('game-world');
+const bgA = document.getElementById('bgA');
+const bgB = document.getElementById('bgB');
+const overlay = document.getElementById('article-overlay');
+const overlayDoc = overlay.querySelector('.document');
+
+/* ===== KOLORY POSTACI ===== */
+const NAME_COLOR = {
+  '…': 'var(--name-narrator)',
+  'Sara': 'var(--name-sara)',
+  'Karo': 'var(--name-karo)',
+  'Monika': 'var(--name-monika)'
+};
+
+/* ===== MINIGRA: badanie ciała ===== */
+const examOverlay = document.getElementById('exam-overlay');
+const examFrame = document.getElementById('exam-frame');
+const examClose = document.getElementById('exam-close');
+
+let bodyExamDone = false; // odblokuje artykuł po ukończeniu
+
+function openExam(){
+  examFrame.src = 'body_exam.html';      // ścieżka do minigry
+  examOverlay.classList.add('visible');
+}
+function closeExam(){
+  if (!bodyExamDone) { 
+    examClose.textContent = 'Zamknij (ukończ najpierw)';
+    setTimeout(()=> examClose.textContent='Zamknij', 1200);
+    return; 
+  }
+  examOverlay.classList.remove('visible');
+  examFrame.src = 'about:blank';
+  renderStep(); // odśwież wybory po ukończeniu minigry
+}
+examOverlay.addEventListener('click', (e)=>{ if(e.target === examOverlay) closeExam(); });
+examClose.addEventListener('click', closeExam);
+
+// sygnał z minigry
+window.addEventListener('message', (e)=>{
+  if (e.data === 'bodyExamFinished'){
+    bodyExamDone = true;
+    closeExam();
+  }
+});
+
+/* ===== TŁO ===== */
+let activeBg = 'A';
+function changeBackground(fileName){
+  const next = activeBg === 'A' ? bgB : bgA;
+  const cur  = activeBg === 'A' ? bgA : bgB;
+  const url = `url('images/${fileName}')`;
+  if(next.style.backgroundImage === url && next.classList.contains('visible')) return;
+  next.style.backgroundImage = url;
+  const img = new Image();
+  img.onload = ()=>{ cur.classList.remove('visible'); next.classList.add('visible'); activeBg = activeBg==='A' ? 'B' : 'A'; };
+  img.src = `images/${fileName}`;
+}
+
+/* ===== AUDIO ===== */
+let musicStarted=false;
+function startMusicIfNeeded(){
+  if(!musicStarted){
+    const m = document.getElementById('music');
+    if(m) { try{ m.volume=0.6; m.play(); }catch(e){} }
+    musicStarted = true;
+  }
+}
+function sfx(id, vol=1){
+  const a = document.getElementById(id);
+  if(a){ try{ a.currentTime=0; a.volume=vol; a.play(); }catch(e){} }
+}
+document.addEventListener('pointerdown', startMusicIfNeeded, { once:true });
+
+/* ===== OVERLAY ARTYKUŁU ===== */
+function showOverlay(){ overlay.classList.add('visible'); }
+function hideOverlay(){ overlay.classList.remove('visible'); }
+overlay.addEventListener('click', (e)=>{ if(e.target === overlay) hideOverlay(); });
+overlayDoc.addEventListener('click', (e)=> e.stopPropagation());
+document.addEventListener('keydown', (e)=>{ if(e.key==='Escape'){ hideOverlay(); }});
+
+/* ===== HELPERY ===== */
+const anyOverlayOpen = ()=> overlay.classList.contains('visible') || examOverlay.classList.contains('visible');
+
+/* ===== UI ===== */
+function showDialogue(speaker, text, color='var(--name-narrator)'){
+  speakerEl.textContent = speaker || '…';
+  speakerEl.style.color = color;
+  dialogueTextEl.innerHTML = text || '';
+}
+function showChoices(choices){
+  choicesBoxEl.innerHTML = '';
+  choices.forEach((c,i)=>{
+    const b=document.createElement('button');
+    b.className='choice-btn';
+    b.type='button';
+    b.textContent=typeof c.text==='function'?c.text():c.text;
+    b.style.animationDelay=`${i*70}ms`;
+    b.addEventListener('click', ()=> c.action && c.action());
+    choicesBoxEl.appendChild(b);
+  });
+}
+
+/* ===== STEROWANIE ===== */
+window.addEventListener('keydown', (e)=>{
+  if(e.key==='Enter' && choicesBoxEl.childElementCount===0 && !anyOverlayOpen()){
+    e.preventDefault(); nextStep();
+  }
+  const n = parseInt(e.key,10);
+  if(!isNaN(n) && n>0 && n<=choicesBoxEl.childElementCount){
+    e.preventDefault(); choicesBoxEl.children[n-1].click();
+  }
+});
+gameWorld.addEventListener('click', (e)=>{
+  if (anyOverlayOpen()) return;
+  if (e.target.closest('.choice-btn')) return;
+  if (choicesBoxEl.childElementCount === 0) nextStep();
+});
+
+/* ===== STAN ===== */
+let triedWait=false, triedFlee=false, readArticle=false, triedPhone=false;
+
+/* ===== FABUŁA (bogata, z mówcą) ===== */
+const story = [
+  /* Podejście do stacji */
+  { bg:'droga_za_szlabanem.png', s:'…', t:'Przeszliśmy na drugą stronę. Droga była ledwo widoczna, niemal całkowicie pochłonięta przez chwasty.' },
+  { s:'Karo', t:'Tam.' },
+  { s:'…', t:'Stacja benzynowa wyglądała jak ruina, zapomniana przez czas i ludzi.' },
+  { action:()=>sfx('sfx-gunshot',0.6), s:'…', t:'W tym momencie do naszych uszu dotarł głuchy dźwięk wystrzału. Karo wypuściła szkicownik, który z trzaskiem uderzył o ziemię.' },
+  { s:'Monika', t:'Co to…?' },
+  { s:'…', t:'Strzał – wykrztusiłem, choć gardło miałem suche jak papier.' },
+  { s:'Karo', t:'Jakbyśmy tego nie wiedzieli.' },
+  { s:'…', t:'Musimy to sprawdzić.' },
+  { s:'…', t:'Sara spojrzała na mnie. Jej oczy były szeroko otwarte, a w ich głębi czaił się cień paniki. W końcu skinęła niepewnie głową.' },
+
+  /* Wybór: ruch/zwłoka/odwrót */
+  { type:'choice', choices:()=>[
+      { text:'Idźcie na stację', action:()=>jumpTo(12) },
+      { text: triedWait ? 'Ukryjcie się i czekajcie (już próbowaliście)' : 'Ukryjcie się i czekajcie', action:()=>{ triedWait=true; jumpTo(10); } },
+      { text: triedFlee ? 'Wróćcie do samochodu (błądzicie)' : 'Wróćcie do samochodu', action:()=>{ triedFlee=true; jumpTo(24); } },
+  ]},
+
+  /* Czekanie */
+  { s:'…', t:'Kucamy za gęstymi krzakami. Mija minuta. Potem kolejna. Nic. Złowroga cisza jest gorsza niż jakikolwiek hałas.' },
+  { type:'choice', choices:()=>[
+      { text:'Idźcie na stację', action:()=>jumpTo(12) },
+      { text: triedFlee ? 'Wróćcie do samochodu (błądzicie)' : 'Wróćcie do samochodu', action:()=>{ triedFlee=true; jumpTo(24); } },
+  ]},
+
+  /* Wejście do środka */
+  { bg:'stacja_wnetrze.jpg', action:()=>sfx('sfx-creak',0.8), s:'…', t:'Drzwi stacji były lekko uchylone. Gdy pchnąłem je dłonią, zawiasy zaskrzypiały przeciągle.' },
+  { s:'…', t:'W środku metaliczna woń krwi zmieszana z zapachem stęchlizny i pleśni sprawiła, że Monika zakryła usta dłonią, by stłumić odruch wymiotny. Sara jęknęła cicho, a Karo zacisnęła zęby.' },
+  { s:'…', t:'Wtedy go zobaczyliśmy. Leżał za ladą, niczym bezwładna lalka. Wokół niego, na podłodze rozlewała się kałuża krwi, która lśniła w nikłym świetle neonu.' },
+  { s:'…', t:'Na skroni mężczyzny widniała ogromna dziura, wokół której widoczne były ślady przypalonej skóry i włosów. Resztki czaszki i mózgu pokrywały ścianę tuż za nim.' },
+  { s:'…', t:'Najgorsza była twarz. Zastygł na niej groteskowy grymas agonii, który w dziwny sposób przechodził w coś przypominającego wykrzywiony, upiorny uśmiech. W prawej dłoni wciąż trzymał pistolet. Poznałem go po ubraniu. To był ten sam meżczyzna, który wczoraj w nocy wywrócił kosz pod moim mieszkaniem.' },
+
+  /* Wybory na stacji: minigra + gazeta po minigrze */
+  { type:'choice', choices:()=>[
+      { text:'Przyjrzyj się ciału (minigra)', action:()=> openExam() },
+      { 
+        text: ()=> bodyExamDone 
+          ? (readArticle ? 'Przeczytaj dokument (otwórz ponownie)' : 'Podnieś dokument z półki') 
+          : 'Podnieś dokument z półki (zbadaj najpierw ciało)',
+        action:()=>{ 
+          if(!bodyExamDone){ return; } 
+          readArticle = true; 
+          showOverlay(); 
+        } 
+      },
+      { text: triedPhone ? 'Zadzwoń na policję (brak zasięgu)' : 'Zadzwoń na policję', action:()=>jumpTo(21) },
+      { text: triedFlee ? 'Wróćcie do samochodu' : 'Wróćcie do samochodu', action:()=>{ triedFlee=true; jumpTo(24); } },
+  ]},
+
+  /* Czytanie artykułu – opis (overlay) */
+  { s:'…', t:'Obok ciała leżał stary, zżółknięty artykuł z lokalnej gazety. Monika, blada jak płótno, pochyliła się nad pożółkłym papierem, od którego bił zapach wilgoci.' },
+  { s:'…', t:'Latarka rzucała drżący blask na litery, które zdawały się poruszać na szorstkim papierze. Odchrząknęła i zaczęła czytać.' },
+  { type:'choice', choices:()=>[
+      { text:'Zamknij artykuł', action:()=>{ hideOverlay(); } },
+      { text:'Wróć', action:()=>jumpTo(17) },
+  ]},
+
+  /* Telefon – brak zasięgu */
+  { s:'Monika', t:'To szaleństwo! Nie możemy tu zostać! Musimy wezwać policję.' },
+  { s:'Sara', t:'Uspokój się. Już próbowałam, gdy tylko go zobaczyłam. Nie ma sygnału.', action:()=>{ triedPhone = true; } },
+  { type:'choice', choices:()=>[
+      { text:'Rozejrzyjcie się dalej na stacji', action:()=>jumpTo(16) },
+      { text: triedFlee ? 'Wróćcie do samochodu' : 'Wróćcie do samochodu', action:()=>{ triedFlee=true; jumpTo(24); } },
+  ]},
+
+  /* Decyzja Moniki – odwrót */
+  { s:'Monika', t:'A samochód? Wracajmy. Teraz.' },
+  { s:'Karo', t:'To nie takie proste…' },
+  { s:'Monika', t:'Proste? Nic tu nie jest proste! Zosia zaginęła, a teraz znajdujemy ciało i… Wracam do auta. Jeśli macie odrobinę rozumu, pójdziecie ze mną.' },
+
+  /* Marsz po auto → zagubienie */
+  { bg:'las_mgla.png', s:'…', t:'Dziewczyny popatrzyły po sobie, w końcu podążyły za nią. Ruszyłem ich śladem. Zimne powietrze owiało nam twarze, gdy wyszliśmy na zewnątrz.' },
+  { s:'…', t:'Zapadł półmrok, a droga, którą przyszliśmy, była ledwie widoczna. Szliśmy w milczeniu, ale czułem się obserwowany.' },
+  { s:'Sara', t:'Czekajcie. Coś jest nie tak. Tych kamieni tu nie było.' },
+  { s:'…', t:'Na ścieżce leżał stosik białych, gładkich, owalnych kamieni.' },
+  { s:'Karo', t:'Chyba już tędy szliśmy.' },
+  { s:'Monika', t:'To niemożliwe…', },
+  { s:'…', t:'Mgła między drzewami gęstniała, otaczając nas niczym żywa istota.' },
+  { type:'choice', choices:()=>[
+      { text:'Wróćcie na stację', action:()=>jumpTo(35) },
+  ]},
+
+  /* Powrót na stację */
+  { bg:'droga_za_szlabanem.png', s:'Sara', t:'Wróćmy do stacji. Tam mamy dach nad głową.' },
+  { s:'Monika', t:'Tam jest martwy człowiek!' },
+  { s:'Sara', t:'A gdzie indziej pójdziemy?' },
+  { s:'…', t:'Nie było odpowiedzi. W gęstniejącym mroku, pośród drzew, które zdawały się nas osaczać, panowała tylko cisza. Zgodziliśmy się wrócić.' },
+  { s:'…', t:'Droga powrotna na stację była koszmarem. Każda droga wyglądała tak samo, a mgła zacierała wszelkie punkty orientacyjne.' },
+  { s:'…', t:'Mieliśmy wrażenie, że las bawi się z nami w okrutną grę, pokazując nam wciąż te same powykrzywiane drzewa i zarośla.' },
+  { s:'…', t:'W końcu, gdy byliśmy już na skraju wyczerpania, przez mgłę przebiła się sylwetka stacji.' },
+
+  /* Schronienie na stacji */
+  { bg:'stacja_wnetrze.jpg', s:'…', t:'Wepchnęliśmy się do środka, zamykając za sobą drzwi przed napierającą ciemnością. Wewnątrz panował chłód i odór śmierci.' },
+  { s:'…', t:'Nikt nie odważył się spojrzeć w kąt za ladą, gdzie leżał trup. Sara znalazła starą, brudną plandekę i bez słowa narzuciła ją na ciało, tworząc makabryczny kopiec w centrum naszego schronienia.' },
+  { s:'…', t:'Usiedliśmy na zakurzonej podłodze, opierając się o brudne ściany. Zapanowała ciężka cisza, przerywana tylko świstem wiatru za oknem i nerwowym stukaniem palców Karoliny o okładkę szkicownika.' },
+
+  /* Plan */
+  { s:'Sara', t:'Musimy mieć jakiś plan. Rano spróbujemy jeszcze raz znaleźć samochód.' },
+  { s:'Monika', t:'Rano? Myślisz, że ten las tak po prostu nas wypuści? Kręciliśmy się w kółko! On nas nie chce wypuścić!' },
+  { s:'Sara', t:'Więc co proponujesz? Mamy tu zostać i czekać na… nie wiem na co?' },
+  { s:'Karo', t:'Nie. Mamy iść tam, gdzie powinniśmy pójść od samego początku.' },
+  { s:'…', t:'Wszystkie spojrzenia skierowały się na nią. – „Znasz to miejsce, prawda? Nasze miejsce w lesie, gdzie zawsze się bawiliśmy”.' },
+  { s:'…', t:'Wyjąłem z kieszeni list od Zosi. Jego krawędzie były już postrzępione. Wszyscy znaliśmy te słowa na pamięć.' },
+  { s:'…', t:'Nasze miejsce. Pamiętałem je doskonale.' },
+  { s:'…', t:'Dla nas, dzieciaków z sierocińca, był to azyl. Tam uciekaliśmy przed surowością opiekunów i własnymi lękami. Budowaliśmy szałasy, opowiadaliśmy sobie historie o potworach, nie wiedząc, że prawdziwy koszmar czai się tuż obok.' },
+  { s:'…', t:'To tam wszystko się zaczęło… – wyszeptałem, bardziej do siebie niż do nich.' },
+  { s:'Sara', t:'I tam musi się skończyć. Ona na nas czeka.' },
+  { s:'Monika', t:'Jesteście szaleni. Chcecie iść w środek nocy do tego cholernego lasu, bo tak napisał wariat, który podszywa się pod zmarłą dziewczynkę?' },
+  { s:'…', t:'A co jeśli to nie żart? – czuję zimny dreszcz. – Co jeśli ona naprawdę tam jest i potrzebuje pomocy? Las nas nie wypuści. Samochód zniknął. Ten człowiek…' },
+  { s:'Sara', t:'Nie mamy wyboru. Zostanie tutaj to powolna śmierć.' },
+
+  { end:true }
+];
+
+/* ===== SILNIK ===== */
+let idx = 0;
+function renderStep(){
+  const s = story[idx];
+  choicesBoxEl.innerHTML = '';
+  if(!s) return;
+  if(s.bg) changeBackground(s.bg);
+  if(s.action) s.action();
+
+  if(s.type === 'choice'){
+    showDialogue('…','Wybierz działanie:');
+    showChoices(s.choices());
+    return;
+  }
+  if(s.end){
+    showDialogue('…','Decyzja zapadła. Czas ruszać.');
+    finalChoice.style.display = 'block';
+    return;
+  }
+  const speaker = s.s || '…';
+  const color = NAME_COLOR[speaker] || 'var(--name-narrator)';
+  showDialogue(speaker, s.t, color);
+}
+function nextStep(){
+  if(choicesBoxEl.childElementCount > 0 || anyOverlayOpen()) return;
+  if(idx < story.length-1){ idx++; renderStep(); }
+}
+function jumpTo(i){
+  idx = Math.max(0, Math.min(i, story.length - 1));
+  renderStep();
+}
+
+/* start */
+renderStep();
+</script>
+</body>
+</html>

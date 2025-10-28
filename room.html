@@ -1,0 +1,334 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Ciche Wzgórze — Pokój</title>
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,700;1,400&display=swap');
+
+    :root {
+        --bg-color: #000;
+        --text-color: #e2e8f0;
+        --border-color: #44403c;
+        --panel-bg: rgba(12, 10, 9, 0.9);
+        --choice-bg: rgba(41, 37, 36, 0.8);
+        --choice-hover-bg: #c7a26d;
+        --name-narrator: #c7a26d;
+    }
+
+    * { box-sizing: border-box; }
+
+    body, html {
+        height: 100%; margin: 0;
+        font-family: 'Lora', serif;
+        background-color: var(--bg-color);
+        color: var(--text-color);
+        overflow: hidden;
+    }
+
+    #game-world {
+        position: relative; width: 100%; height: 100%;
+        background-color: #000;
+    }
+
+    .layer {
+        position: absolute; inset: 0;
+        background-size: cover; background-position: center;
+        transition: opacity 1.5s ease-in-out, background-image 1s ease-in-out;
+    }
+
+    #background-layer { background-image: url('images/pokoj_ciemny.png'); }
+
+    #ui-layer {
+        display: flex; flex-direction: column;
+        justify-content: flex-end; align-items: center;
+        padding: 20px;
+    }
+
+    #text-box {
+        width: 100%; max-width: 900px;
+        min-height: 180px;
+        background: var(--panel-bg);
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        padding: 25px 30px;
+        backdrop-filter: blur(3px);
+        margin-bottom: 20px;
+    }
+
+    #speaker-name {
+        font-weight: bold; font-size: 1.3em;
+        margin-bottom: 15px; display: block;
+        color: var(--name-narrator);
+    }
+
+    #dialogue-text { line-height: 1.8; font-size: 1.25em; }
+    
+    #choices-box {
+        width: 100%; max-width: 900px;
+        display: flex; flex-direction: column; gap: 10px;
+    }
+
+    .choice-btn {
+        background: var(--choice-bg);
+        border: 1px solid var(--border-color);
+        color: var(--text-color);
+        font-family: 'Lora', serif; font-size: 1.1em;
+        padding: 15px 20px; text-align: left;
+        cursor: pointer; border-radius: 5px;
+        transition: all 0.2s;
+        opacity: 0; transform: translateY(10px);
+        animation: slideUpChoice 0.5s forwards;
+    }
+
+    .choice-btn:hover {
+        background: var(--choice-hover-bg);
+        color: #000;
+        border-color: var(--choice-hover-bg);
+    }
+    
+    @keyframes slideUpChoice { to { opacity: 1; transform: translateY(0); } }
+
+    .overlay {
+        position: fixed; inset: 0; z-index: 100;
+        display: flex; align-items: center; justify-content: center;
+        background: rgba(0,0,0,0.85);
+        opacity: 0; transition: opacity 0.5s;
+        pointer-events: none;
+    }
+    .overlay.visible { opacity: 1; pointer-events: auto; }
+    
+    .document {
+        width: 90%; max-width: 600px; height: 80%;
+        background-color: #fdfaf4;
+        background-image: url('images/papier.png');
+        color: #333;
+        padding: 40px; border: 1px solid #ccc;
+        box-shadow: 0 0 30px black;
+        overflow-y: auto; cursor: pointer;
+    }
+    .document h2 { margin-top: 0; }
+    .document p { line-height: 2; white-space: pre-wrap; font-size: 1.1em; }
+
+    #mirror-overlay img {
+        max-width: 60%; max-height: 80%;
+        border: 4px solid #111;
+        box-shadow: 0 0 50px rgba(255, 255, 255, 0.2);
+    }
+</style>
+</head>
+<body>
+    <div id="game-world">
+        <div id="background-layer" class="layer"></div>
+        
+        <div id="ui-layer" class="layer">
+            <div id="text-box">
+                <span id="speaker-name">...</span>
+                <p id="dialogue-text"></p>
+            </div>
+            <div id="choices-box"></div>
+            </div>
+
+        <div id="letter-overlay" class="overlay">
+            <div class="document">
+                <h2>List od Zosi</h2>
+                <p>Cześć,
+Wiem, że myślicie, że mnie już nie ma. Myśleliście, że nigdy więcej o mnie nie usłyszycie. Ale jestem…
+Pamiętasz tamten dzień? Wiem, że próbujesz o nim zapomnieć. Wszyscy to robicie. Ale Ciche Wzgórze nie zapomina. I ja również nie mogłam odejść. Coś mnie tu trzyma… coś, czego nigdy nie zrozumieliście.
+Sierociniec skrywał więcej tajemnic, niż kiedykolwiek sobie wyobrażaliście. Teraz wszystko to wychodzi na powierzchnię, a ja potrzebuję was, żeby to zakończyć. Musicie wrócić. Nie mam zbyt wiele czasu.
+Znasz to miejsce, prawda? Nasze miejsce w lesie, gdzie zawsze się bawiliśmy. Gdzie wszystko się zaczęło… i gdzie wszystko musi się zakończyć. Przyjdźcie tam. Razem. Tylko razem możecie zrozumieć, co się naprawdę wydarzyło. Musicie stawić czoła temu, przed czym uciekacie od lat.
+Nie możecie uciekać wiecznie.
+Czekam na was.
+Zosia”
+</p>
+            </div>
+        </div>
+
+        <div id="diary-overlay" class="overlay">
+            <div class="document">
+                <h2>Stary Pamiętnik</h2>
+                <p><b>`Poniedziałek, 13 listopada Poranek był ciężki. Nie chciało mi się wstawać — i tak nikt na mnie nie czeka. Zrobiłem herbatę, chleb był czerstwy, ale wystarczyło by zaspokoić głód. Na ulicy minąłem kilku ludzi, szli razem i rozmawiali. Zazdrościłem im tego. W pracy nikt się nie odzywał poza krótkim „dzień dobry”. Na marginesie strony ktoś narysował wysokie, krzywe drzewa.`,
+      `Wtorek, 14 listopada W nocy znów miałem koszmar. Widziałem korytarze sierocińca. Gdy się obudziłem długo patrzyłem w sufit. Dopisek inną ręką: „Oni wciąż tu są.”`,
+      `Środa, 15 listopada Padał deszcz. Zostałem w mieszkaniu, czytałem książki, ale żadna nie dawała ukojenia...`,
+      `Czwartek, 16 listopada Obudziłem się o trzeciej nad ranem. Na marginesie dopisane: „On czeka.”`,
+      `Piątek, 17 listopada W lustrze...`,
+      `Sobota, 18 listopada Dzień wolny. Tak bardzo chcę odpocząć.`,
+      `Ostatnia strona: Nie wolno patrzeć w lustro po zmroku.`</p>
+            </div>
+        </div>
+        
+        <div id="mirror-overlay" class="overlay">
+            <img src="images/lustro.png" alt="Odbicie w lustrze">
+        </div>
+    </div>
+    
+    <audio id="sfx-lamp"><source src="audio/lamp_switch.mp3"></audio>
+    <audio id="sfx-paper"><source src="audio/paper_rustle.mp3"></audio>
+    <audio id="sfx-box-open"><source src="audio/box_open.mp3"></audio>
+    <audio id="sfx-horror"><source src="audio/horror_stinger.mp3"></audio>
+    <audio id="sfx-crash"><source src="audio/metal_crash.mp3"></audio>
+    <audio id="music" loop>
+        <source src="audio/muzyka_tlo.mp3" type="audio/mpeg">
+    </audio>
+
+
+<script>
+    const dialogueTextEl = document.getElementById('dialogue-text');
+    const choicesBoxEl = document.getElementById('choices-box');
+    const backgroundLayer = document.getElementById('background-layer');
+    const letterOverlay = document.getElementById('letter-overlay');
+    const diaryOverlay = document.getElementById('diary-overlay');
+    const mirrorOverlay = document.getElementById('mirror-overlay');
+    // ZMIANA: Usunięto referencję do finalChoice
+    
+    const sfx = {
+        lamp: document.getElementById('sfx-lamp'),
+        paper: document.getElementById('sfx-paper'),
+        boxOpen: document.getElementById('sfx-box-open'),
+        horror: document.getElementById('sfx-horror'),
+        crash: document.getElementById('sfx-crash')
+    };
+    
+    let musicStarted = false;
+    function startMusicIfNeeded() {
+        if (!musicStarted) {
+            const musicAudio = document.getElementById('music');
+            if (musicAudio) {
+                musicAudio.volume = 0.6;
+                musicAudio.play().catch(e => console.error("Błąd odtwarzania muzyki:", e));
+                musicStarted = true;
+            }
+        }
+    }
+
+    function showText(text) { dialogueTextEl.innerHTML = text; }
+
+    function showChoices(choices) {
+        choicesBoxEl.innerHTML = '';
+        choices.forEach((choice, index) => {
+            if (choice.condition && !choice.condition()) return;
+            const button = document.createElement('button');
+            button.className = 'choice-btn';
+            button.textContent = choice.text;
+            button.style.animationDelay = `${index * 100}ms`;
+            
+            button.onclick = () => {
+                startMusicIfNeeded();
+                choicesBoxEl.innerHTML = '';
+                choice.action();
+            };
+            choicesBoxEl.appendChild(button);
+        });
+    }
+
+    const flags = {
+        lampOn: false,
+        hasLetter: false,
+        readLetter: false,
+        searchedDrawer: false,
+        hasKey: false,
+        openedBox: false,
+        readDiary: false,
+        checkedMirror: false,
+    };
+
+    const scenes = {
+        start: () => {
+            showText("Pobudka jest równie przerażająca co koszmar. Serce dudni ci w piersi. Wokół panuje półmrok.");
+            showChoices([
+                { text: "Rozejrzyj się w ciemności", action: scenes.lookAroundDark },
+                { text: "Zapal lampkę na stoliku", action: scenes.turnOnLamp }
+            ]);
+        },
+
+        lookAroundDark: () => {
+            showText("Ciemność skrywa większość pomieszczenia. Ledwo widzisz kontury mebli. Najbliżej ciebie stoi stolik z lampką nocną.");
+            showChoices([ { text: "Zapal lampkę", action: scenes.turnOnLamp } ]);
+        },
+
+        turnOnLamp: () => {
+            flags.lampOn = true;
+            sfx.lamp.play();
+            backgroundLayer.style.backgroundImage = "url('images/pokoj_jasny.png')";
+            showText("Klik. Ciepły krąg światła odgania mrok. Widzisz wyraźnie swoje mieszkanie. Na stoliku leży koperta, której na pewno tu nie było, gdy kładłeś się spać. Szuflada jest lekko uchylona. Budzik pokazuje: 3:03.");
+            scenes.mainRoom();
+        },
+
+        mainRoom: () => {
+             showChoices([
+                { text: "Weź kopertę", action: scenes.takeLetter, condition: () => !flags.hasLetter },
+                { text: "Czytaj list", action: scenes.readLetter, condition: () => flags.hasLetter && !flags.readLetter },
+                { text: "Przeszukaj szufladę", action: scenes.searchDrawer, condition: () => !flags.searchedDrawer },
+                { text: "Otwórz kasetkę kluczem", action: scenes.openBox, condition: () => flags.hasKey && !flags.openedBox },
+                { text: "Przeczytaj pamiętnik", action: scenes.readDiary, condition: () => flags.openedBox && !flags.readDiary },
+                { text: "Spójrz w lustro", action: scenes.lookInMirror, condition: () => flags.readDiary && !flags.checkedMirror }
+            ]);
+        },
+
+        takeLetter: () => {
+            flags.hasLetter = true;
+            sfx.paper.play();
+            showText("Bierzesz kopertę. Papier jest stary i zawilgociały. Na stemplu pocztowym widzisz nazwę: „Ciche Wzgórze” i datę sprzed trzech dni. <br>Nagle uderza cię krótka wizja: mała dziewczynka pochylona nad biurkiem...");
+            scenes.mainRoom();
+        },
+        
+        searchDrawer: () => {
+            flags.searchedDrawer = true;
+            flags.hasKey = true;
+            showText("Wysuwasz szufladę. Między książkami znajdujesz mały, żelazny klucz i zamkniętą kasetkę.");
+            scenes.mainRoom();
+        },
+
+        openBox: () => {
+            flags.openedBox = true;
+            sfx.boxOpen.play();
+            showText("Klucz pasuje. Otwierasz kasetkę. W środku leży stary, oprawiony w skórę pamiętnik.");
+            scenes.mainRoom();
+        },
+
+        readDiary: () => {
+            flags.readDiary = true;
+            diaryOverlay.classList.add('visible');
+            diaryOverlay.onclick = () => {
+                diaryOverlay.classList.remove('visible');
+                showText("Po przeczytaniu ostatniej, niepokojącej strony – „Nie wolno patrzeć w lustro po zmroku” – czujesz dziwny przymus, by złamać tę zasadę.");
+                scenes.mainRoom();
+            };
+        },
+
+        lookInMirror: () => {
+            flags.checkedMirror = true;
+            mirrorOverlay.classList.add('visible');
+            sfx.horror.volume = 0.5;
+            sfx.horror.play();
+            
+            setTimeout(() => {
+                mirrorOverlay.classList.remove('visible');
+                showText("W odbiciu, tuż obok twojego ramienia, przez ułamek sekundy migocze niewyraźny kształt... Dreszcz przebiega ci po plecach.");
+                scenes.mainRoom();
+            }, 1500);
+        },
+        
+        // --- ZMIANA: Ta funkcja teraz automatycznie przechodzi dalej ---
+        readLetter: () => {
+            flags.readLetter = true;
+            letterOverlay.classList.add('visible');
+            letterOverlay.onclick = () => {
+                letterOverlay.classList.remove('visible');
+                sfx.crash.play();
+                showText("Gdy kończysz czytać, zza okna rozlega się nagły, metaliczny hałas – serce podskakuje ci do gardła.");
+                choicesBoxEl.innerHTML = '';
+                
+                // Automatyczne przejście do następnego pliku po 3 sekundach
+                setTimeout(() => {
+                    window.location.href = 'pursuit.html';
+                }, 3000);
+            };
+        },
+    };
+
+    scenes.start();
+</script>
+</body>
+</html>

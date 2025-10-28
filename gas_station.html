@@ -1,0 +1,337 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Ciche Wzgórze — Droga</title>
+<link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --bg-color:#000; --text-color:#e2e8f0; --border-color:#44403c;
+    --panel-bg:rgba(12,10,9,0.88); --choice-bg:rgba(41,37,36,0.86);
+    --choice-hover-bg:#c7a26d; --name-narrator:#c7a26d;
+    --name-sara: #a7c7c8; --name-karo: #bda2d9; --name-monika: #d9a2a2;
+  }
+  *{box-sizing:border-box;}
+  html,body{height:100%;margin:0;background:#000;color:var(--text-color);font-family:'Lora',serif;overflow:hidden;}
+  #game-world{position:relative;width:100%;height:100%;}
+
+  .layer{position:absolute;inset:0}
+  #bg-stack{isolation:isolate}
+  .bg{position:absolute;inset:0;background-size:cover;background-position:center;opacity:0;transition:opacity .6s ease-in-out;filter:brightness(.9);}
+  .bg.visible{opacity:1}
+
+  #ui-layer{display:flex;flex-direction:column;justify-content:flex-end;align-items:center;padding:20px;pointer-events:none}
+  #text-box{width:100%;max-width:920px;min-height:200px;background:var(--panel-bg);border:1px solid var(--border-color);border-radius:10px;padding:22px 26px;backdrop-filter:blur(3px);margin-bottom:16px;pointer-events:auto}
+  #speaker-name{font-weight:700;font-size:1.05rem;display:block;margin-bottom:10px;color:var(--name-narrator)}
+  #dialogue-text{line-height:1.75;font-size:1.12rem}
+  #continue-prompt{text-align:right;font-style:italic;color:#9ca3af;margin-top:10px;opacity:0;animation:pulse 2s infinite}
+  #continue-prompt.visible{opacity:1}
+  @keyframes pulse{50%{opacity:.65}}
+
+  #choices-box{width:100%;max-width:920px;display:flex;flex-direction:column;gap:10px;pointer-events:auto;margin-bottom:10px}
+  .choice-btn{background:var(--choice-bg);border:1px solid var(--border-color);color:var(--text-color);font-size:1.05rem;padding:14px 18px;text-align:left;cursor:pointer;border-radius:8px;transition:all .18s;opacity:0;transform:translateY(8px);animation:choiceIn .3s forwards}
+  .choice-btn:hover{background:var(--choice-hover-bg);color:#000;border-color:var(--choice-hover-bg)}
+  @keyframes choiceIn{to{opacity:1;transform:translateY(0)}}
+</style>
+</head>
+<body>
+  <div id="game-world">
+    <div id="bg-stack" class="layer" aria-hidden="true">
+      <div class="bg visible" id="bgA" style="background-image:url('images/samochod_wnetrze.png')"></div>
+      <div class="bg" id="bgB"></div>
+    </div>
+
+    <div id="ui-layer" class="layer">
+      <div id="text-box">
+        <span id="speaker-name">...</span>
+        <p id="dialogue-text"></p>
+        <div id="continue-prompt">▼</div>
+      </div>
+      <div id="choices-box"></div>
+      </div>
+  </div>
+
+  <audio id="music" loop><source src="audio/horror3.mp3" type="audio/mpeg"></audio>
+  <audio id="sfx-radio"><source src="https://cdn.pixabay.com/download/audio/2022/05/17/audio_451ddce818.mp3" type="audio/mpeg"></audio>
+  <audio id="sfx-brake"><source src="audio/hamowanie.mp3" type="audio/mpeg"></audio>
+  <audio id="podcast"><source src="audio/podcast.mp3" type="audio/mpeg"></audio>
+
+<script>
+const dialogueTextEl = document.getElementById('dialogue-text');
+const speakerEl = document.getElementById('speaker-name');
+const choicesBoxEl = document.getElementById('choices-box');
+const continuePrompt = document.getElementById('continue-prompt');
+const gameWorld = document.getElementById('game-world');
+const bgA = document.getElementById('bgA');
+const bgB = document.getElementById('bgB');
+
+let activeBg = 'A';
+let musicStarted = false;
+
+function startMusicIfNeeded(){
+  if(!musicStarted){
+    const m = document.getElementById('music');
+    if(m){ try{ m.volume=0.6; m.play(); }catch(e){} }
+    musicStarted = true;
+  }
+}
+function sfx(id, vol=1){
+  const a = document.getElementById(id);
+  if(a){ try{ a.currentTime=0; a.volume=vol; a.play(); }catch(e){} }
+}
+function changeBackground(fileName){
+  const next = activeBg === 'A' ? bgB : bgA;
+  const cur  = activeBg === 'A' ? bgA : bgB;
+  const url = `url('images/${fileName}')`;
+  if(next.style.backgroundImage === url && next.classList.contains('visible')) return;
+  next.style.backgroundImage = url;
+  const img = new Image();
+  img.onload = ()=>{
+    cur.classList.remove('visible');
+    next.classList.add('visible');
+    activeBg = activeBg === 'A' ? 'B' : 'A';
+  };
+  img.src = `images/${fileName}`;
+}
+
+function showDialogue(speaker, text, color = 'var(--name-narrator)'){
+  speakerEl.textContent = speaker || '...';
+  speakerEl.style.color = color || 'var(--name-narrator)';
+  dialogueTextEl.innerHTML = text || '';
+}
+function showChoices(choices){
+  choicesBoxEl.innerHTML = '';
+  continuePrompt.classList.remove('visible');
+  choices.forEach((c,i)=>{
+    const b = document.createElement('button');
+    b.className = 'choice-btn';
+    b.textContent = c.text;
+    b.style.animationDelay = `${i*70}ms`;
+    b.onclick = ()=> c.action && c.action();
+    choicesBoxEl.appendChild(b);
+  });
+}
+
+window.addEventListener('keydown', (e)=>{
+  if(['Enter',' '].includes(e.key) && choicesBoxEl.childElementCount===0){
+    e.preventDefault(); nextStep();
+  }
+  const n = parseInt(e.key,10);
+  if(!isNaN(n) && n>0 && n<=choicesBoxEl.childElementCount){
+    e.preventDefault(); choicesBoxEl.children[n-1].click();
+  }
+});
+
+let playerWasConciliatory = false;
+
+const storyScript = [
+    { 
+        bg: 'samochod_wnetrze.png', 
+        speaker: '…', 
+        text: 'Jedziecie w milczeniu. To nie jest ta wygodna, kojąca cisza między przyjaciółmi. To ciężar wspomnień, który wciska cię w fotel starego auta, pachnącego wilgocią i dymem papierosowym.' 
+    },
+    { 
+        speaker: '…', 
+        text: 'Siedzisz obok Sary. Jej knykcie, zaciśnięte na kierownicy, bieleją w skąpym świetle deski rozdzielczej. Zawsze była waszą opoką, ale dziś w jej skupionym spojrzeniu dostrzegasz coś nowego... ulotne zmęczenie.' 
+    },
+    { 
+        bg: 'deszcz_pola.png', 
+        speaker: '…', 
+        text: 'Wycieraczki pracują w jednostajnym, hipnotycznym rytmie. Za szybą deszcz rozmazuje światła mijanych latarni w drżące smugi.' 
+    },
+    { 
+        bg: 'karo_szkic.png', 
+        speaker: '…', 
+        text: 'Zerkasz we wsteczne lusterko. Monika opiera głowę o szybę, udając, że śpi. Obok niej Karolina, pochylona nad notatnikiem, coś szkicuje. Nerwowe skrobanie ołówka to jedyny dźwięk, który przebija się przez pomruk silnika.' 
+    },
+    { 
+        type: 'choice', 
+        choices: [
+            { text: '„Jak się trzymasz? Mogę cię zmienić, jeśli chcesz.”', action: () => jumpToStep(5) },
+            { text: '„Strasznie tu cicho. Może włączymy jakieś radio?”', action: () => jumpToStep(6) },
+            { text: '[Pozostań w milczeniu i obserwuj drogę]', action: () => jumpToStep(7) },
+        ]
+    },
+    { 
+        speaker: 'Sara', 
+        color: 'var(--name-sara)', 
+        text: 'Nie trzeba. Dam radę… Ale dziękuję.', 
+        then: 8 
+    },
+    { 
+        speaker: 'Monika', 
+        color: 'var(--name-monika)', 
+        text: 'Radio? Serio? Chcesz zagłuszyć własne myśli, jakby to miało cokolwiek zmienić?', 
+        then: 8 
+    },
+    { 
+        speaker: '…', 
+        text: 'Twoje milczenie jest jak kamień wrzucony w studnię. Napięcie w samochodzie staje się niemal fizyczne, wyczuwalne jak zmiana ciśnienia przed burzą.', 
+        then: 8 
+    },
+    { 
+        bg: 'monika_okno.png', 
+        speaker: 'Monika', 
+        color: 'var(--name-monika)', 
+        text: 'Powinniśmy byli wyjechać rano. Za chwilę będzie kompletnie ciemno.' 
+    },
+    { 
+        speaker: 'Karolina', 
+        color: 'var(--name-karo)', 
+        text: 'Ciemność to nasz stary przyjaciel, Moni. Już zapomniałaś?', 
+    },
+    { 
+        speaker: 'Monika', 
+        color: 'var(--name-monika)', 
+        text: 'Dostaliśmy list od dziewczynki, która nie żyje od piętnastu lat, a my jedziemy prosto w pułapkę! To musi być jakiś chory, popieprzony żart!' 
+    },
+    { 
+        type: 'choice', 
+        choices: [
+            { text: '„Żart? Kto oprócz nas wiedział o tamtym miejscu?”', action: () => { playerWasConciliatory = false; jumpToStep(12); } },
+            { text: '„Nawet jeśli to pułapka, jesteśmy jej to winni. Musimy sprawdzić.”', action: () => { playerWasConciliatory = false; jumpToStep(12); } },
+            { text: '„Monika, rozumiem, że się boisz. Wszyscy się boimy. Ale musimy wiedzieć.”', action: () => { playerWasConciliatory = true; jumpToStep(13); } },
+        ]
+    },
+    { 
+        speaker: 'Monika', 
+        color: 'var(--name-monika)', 
+        text: 'Kto wiedział? A kto mógł się dowiedzieć przez te wszystkie lata?! Ktoś mógł nas śledzić, obserwować! To szaleństwo!', 
+        then: 14 
+    },
+    { 
+        speaker: 'Monika', 
+        color: 'var(--name-monika)', 
+        text: 'Ja… po prostu nie chcę znowu tego widzieć. Nie mogę tam wracać...', 
+        then: 14 
+    },
+    { 
+        bg: 'lusterko_sary.png', 
+        speaker: 'Sara', 
+        color: 'var(--name-sara)', 
+        text: () => playerWasConciliatory
+            ? 'Dość. Monika, weź głęboki oddech. Wszyscy się boimy. Karolina, przestań, proszę. Jesteśmy w tym razem, pamiętacie?'
+            : 'DOŚĆ! Obie! Monika, twoja histeria nie pomaga. Karolina, a ty przestań dolewać oliwy do ognia. Koniec dyskusji. Jedziemy.' 
+    },
+    { 
+        bg: 'szyba_reflektory.png', 
+        speaker: 'Karolina', 
+        color: 'var(--name-karo)',
+        text: 'To nie jest żaden psychol. To jest ten cień, który się za nami ciągnie. Ten sam, który widziałam dziś w nocy. Ten sam, który wszyscy widzieliśmy.' 
+    },
+    { 
+        type: 'choice', 
+        choices: [
+            { text: '„Miałem ten sam koszmar. Ten las i… te głosy.”', action: () => jumpToStep(17) },
+            { text: '„Karo, to był tylko zły sen. Jesteśmy zmęczeni, to wszystko.”', action: () => jumpToStep(17) },
+            { text: '„Spójrz na drogę. Sara, uważaj!”', action: () => jumpToStep(17) },
+        ]
+    },
+    { 
+        speaker: 'Monika', 
+        color: 'var(--name-monika)', 
+        text: 'Sara, zawracaj! Proszę cię, zawróćmy!' 
+    },
+    { 
+        bg: 'dlonie_sary.png', 
+        speaker: 'Sara', 
+        color: 'var(--name-sara)', 
+        text: 'Nie zawrócę. Uciekaliśmy przez piętnaście lat. I gdzie nas to zaprowadziło?' 
+    },
+    { 
+        action: () => {
+            sfx('sfx-radio', 0.3);
+            const music = document.getElementById('music');
+            const podcast = document.getElementById('podcast');
+            if(music) music.volume = 0.2;
+            if(podcast) {
+                setTimeout(() => {
+                    podcast.volume = 0.8;
+                    podcast.play();
+                }, 700);
+            }
+        }, 
+        speaker: '…', 
+        text: 'Sara wyciąga rękę i włącza radio. Przez chwilę słychać tylko szum, ale po chwili z głośników zaczyna płynąć podcast.' 
+    },
+    { 
+        speaker: '…', 
+        text: 'Czujesz, jak samochód zwalnia. Snop świateł z reflektorów ledwo przebija się przez gęstniejącą mgłę, obejmując coraz mniejszy skrawek mokrego asfaltu.' 
+    },
+    { 
+        speaker: 'Sara', 
+        text: 'To już blisko.' 
+    },
+    { 
+        bg: 'szlaban_noc.png', 
+        action: () => sfx('sfx-brake', 0.7), 
+        speaker: '…', 
+        text: 'Wreszcie jest. Zardzewiały szlaban, przegrodzony łańcuchem. Wyblakły napis „Zakaz Wjazdu” ledwo majaczy w świetle reflektorów. Silnik gaśnie.' 
+    },
+    { 
+        speaker: '…', 
+        text: 'I nagle zapada cisza. Gęsta, ciężka, przerywana tylko miarowym bębnieniem deszczu o dach. Jesteście na miejscu.' 
+    },
+    { 
+        type: 'end' 
+    }
+];
+
+let currentStep = 0;
+
+function displayStep(index){
+  const step = storyScript[index];
+  choicesBoxEl.innerHTML = '';
+  continuePrompt.classList.remove('visible');
+  if(!step) return;
+
+  if(step.bg) changeBackground(step.bg);
+  if(step.action) step.action();
+
+  const text = typeof step.text === 'function' ? step.text() : step.text;
+
+  if(step.type === 'choice'){
+    showChoices(step.choices);
+  } else if(step.type === 'end'){
+    // --- ZMIANA: Modyfikacja tej sekcji ---
+    gameWorld.removeEventListener('click', nextStep);
+    showDialogue(step.speaker || '…', text || '', step.color);
+    continuePrompt.classList.remove('visible'); // Ukrywamy strzałkę
+    
+    // Automatyczne przejście po 3 sekundach
+    setTimeout(() => {
+        window.location.href = 'stacja.html';
+    }, 3000);
+    // --- KONIEC ZMIANY ---
+
+  } else {
+    showDialogue(step.speaker || '…', text || '', step.color);
+    continuePrompt.classList.add('visible');
+  }
+}
+
+function nextStep(){
+  startMusicIfNeeded();
+  const step = storyScript[currentStep];
+  const next = (step && step.then !== undefined) ? step.then : currentStep + 1;
+  if(next < storyScript.length){
+    currentStep = next;
+    displayStep(currentStep);
+  }
+}
+
+function jumpToStep(i){
+  currentStep = i;
+  displayStep(currentStep);
+}
+
+gameWorld.addEventListener('click', (e)=>{
+  if(e.target.closest('.choice-btn')) return;
+  if(choicesBoxEl.childElementCount===0) nextStep();
+});
+
+displayStep(0);
+</script>
+</body>
+</html>

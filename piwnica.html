@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="color-scheme" content="dark" />
+<title>Ciche Wzgórze — To, co Spoczywa Poniżej</title>
+<link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --bg-color:#000; --text-color:#e2e8f0; --border-color:#44403c;
+    --panel-bg:rgba(12,10,9,0.88); --choice-bg:rgba(41,37,36,0.86);
+    --choice-hover-bg:#c7a26d; --name-narrator:#c7a26d;
+    --name-sara:#a7c7c8; --name-karo:#bda2d9; --name-monika:#d9a2a2;
+  }
+  *{box-sizing:border-box;}
+  html,body{height:100%;margin:0;background:#000;color:var(--text-color);font-family:'Lora',serif;overflow:hidden;}
+  #game-world{position:relative;width:100%;height:100%;}
+  .layer{position:absolute;inset:0}
+
+  #bg-stack{isolation:isolate}
+  .bg{position:absolute;inset:0;background-size:cover;background-position:center;opacity:0;transition:opacity .8s ease-in-out, background-image .1s linear;filter:brightness(.7);}
+  .bg.visible{opacity:1}
+  
+  #fx-layer { transition: background-color 0.1s ease-in-out, opacity 0.3s ease; }
+  @keyframes flicker {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0; }
+  }
+  .flicker-effect { animation: flicker 0.15s steps(1, end) 3; }
+
+  #ui-layer{display:flex;flex-direction:column;justify-content:flex-end;align-items:center;padding:20px;pointer-events:none}
+  #text-box{width:100%;max-width:920px;min-height:200px;background:var(--panel-bg);border:1px solid var(--border-color);border-radius:10px;padding:22px 26px;backdrop-filter:blur(3px);margin-bottom:16px;pointer-events:auto}
+  #speaker-name{font-weight:700;font-size:1.05rem;display:block;margin-bottom:10px;color:var(--name-narrator)}
+  #dialogue-text{line-height:1.75;font-size:1.12rem}
+
+  #choices-box{width:100%;max-width:920px;display:flex;flex-direction:column;gap:10px;pointer-events:auto;margin-bottom:10px}
+  .choice-btn{background:var(--choice-bg);border:1px solid var(--border-color);color:var(--text-color);font-size:1.05rem;padding:14px 18px;text-align:left;cursor:pointer;border-radius:8px;transition:all .18s;opacity:0;transform:translateY(8px);animation:choiceIn .3s forwards}
+  .choice-btn:hover{background:var(--choice-hover-bg);color:#000;border-color:var(--choice-hover-bg)}
+  .choice-btn:focus-visible{outline:2px solid var(--choice-hover-bg);outline-offset:2px}
+  @keyframes choiceIn{to{opacity:1;transform:translateY(0)}}
+
+  #final-choice{display:none;position:absolute;bottom:36px;left:50%;transform:translateX(-50%);z-index:50;pointer-events:auto}
+  #final-choice .choice-btn{opacity:1;transform:none}
+</style>
+</head>
+<body>
+  <div id="game-world">
+    <div id="bg-stack" class="layer" aria-hidden="true">
+      <div class="bg visible" id="bgA" style="background-image:url('images/piwnica_schody.png')"></div>
+      <div class="bg" id="bgB"></div>
+    </div>
+    <div id="fx-layer" class="layer"></div>
+
+    <div id="ui-layer" class="layer">
+      <div id="text-box">
+        <span id="speaker-name">...</span>
+        <p id="dialogue-text" aria-live="polite"></p>
+      </div>
+      <div id="choices-box"></div>
+      <div id="final-choice">
+        <button class="choice-btn" type="button" onclick="location.href='final.html'">Wróćcie do gabinetu</button>
+      </div>
+    </div>
+  </div>
+
+  <audio id="music" loop preload="auto"><source src="audio/muzyka_tlo_piwnica.mp3" type="audio/mpeg"></audio>
+  <audio id="sfx-monster-scream" preload="auto"><source src="https://audio-previews.elements.envatousercontent.com/files/452425713/preview.mp3"></audio>
+  <audio id="sfx-monster-hit" preload="auto"><source src="audio/potwor_cios.mp3"></audio>
+  <audio id="sfx-beam-break" preload="auto"><source src="audio/hit.mp3"></audio>
+  <audio id="sfx-flesh" preload="auto"><source src="audio/profanacja.mp3"></audio>
+  <audio id="sfx-door-slam" preload="auto"><source src="audio/drzwi_trzasniecie.mp3"></audio>
+  <audio id="sfx-unlock" preload="auto"><source src="audio/klucz_przekrecanie.mp3"></audio>
+
+<script>
+/* ===== DOM & ZMIENNE ===== */
+const dialogueTextEl = document.getElementById('dialogue-text');
+const speakerEl = document.getElementById('speaker-name');
+const choicesBoxEl = document.getElementById('choices-box');
+const finalChoice = document.getElementById('final-choice');
+const gameWorld = document.getElementById('game-world');
+const bgA = document.getElementById('bgA');
+const bgB = document.getElementById('bgB');
+const fxLayer = document.getElementById('fx-layer');
+
+const NAME_COLOR = {
+  '…': 'var(--name-narrator)', 'Sara': 'var(--name-sara)', 'Karo': 'var(--name-karo)', 'Monika': 'var(--name-monika)'
+};
+let musicStarted = false;
+
+/* ===== AUDIO & EFEKTY ===== */
+function startMusicIfNeeded(){
+  if(!musicStarted){
+    const m = document.getElementById('music');
+    if(m) try{ m.volume=0.6; m.play(); } catch(e){}
+    musicStarted = true;
+  }
+}
+function sfx(id, vol=1){
+  const a = document.getElementById(id);
+  if(a) try{ a.currentTime=0; a.volume=vol; a.play(); } catch(e){}
+}
+function flickerEffect() {
+  fxLayer.classList.add('flicker-effect');
+  setTimeout(() => fxLayer.classList.remove('flicker-effect'), 500);
+}
+document.addEventListener('pointerdown', startMusicIfNeeded, { once:true });
+
+/* ===== TŁO & UI ===== */
+let activeBg = 'A';
+function changeBackground(fileName){
+  const next = activeBg === 'A' ? bgB : bgA;
+  const cur  = activeBg === 'A' ? bgA : bgB;
+  const url = `url('images/${fileName}')`;
+  if(next.style.backgroundImage === url && next.classList.contains('visible')) return;
+  next.style.backgroundImage = url;
+  const img = new Image();
+  img.onload = ()=>{ cur.classList.remove('visible'); next.classList.add('visible'); activeBg = activeBg==='A' ? 'B' : 'A'; };
+  img.src = `images/${fileName}`;
+}
+function showDialogue(speaker, text, color='var(--name-narrator)'){
+  speakerEl.textContent = speaker || '…';
+  speakerEl.style.color = color;
+  dialogueTextEl.innerHTML = text || '';
+}
+function showChoices(choices){
+  choicesBoxEl.innerHTML = '';
+  choices.forEach((c,i)=>{
+    const b=document.createElement('button');
+    b.className='choice-btn'; b.type='button';
+    b.textContent=c.text;
+    b.style.animationDelay=`${i*70}ms`;
+    b.addEventListener('click', ()=> c.action && c.action());
+    choicesBoxEl.appendChild(b);
+  });
+}
+
+/* ===== SILNIK GRY ===== */
+let idx = 0;
+function renderStep(){
+  const s = story[idx];
+  choicesBoxEl.innerHTML = '';
+  if(!s) return;
+  if(s.bg) changeBackground(s.bg);
+  if(s.action) s.action();
+  if(s.type === 'choice'){
+    showDialogue('…', s.prompt || 'Co robicie?');
+    showChoices(s.choices);
+    return;
+  }
+  if(s.end){
+    showDialogue('…', 'Ranni, wstrząśnięci, brudni. Ale w zakrwawionej dłoni Sary spoczywał klucz. Cena, jaką za niego zapłaciliście, była niewyobrażalna.');
+    finalChoice.style.display = 'block';
+    return;
+  }
+  const speaker = s.s || '…';
+  const color = NAME_COLOR[speaker] || 'var(--name-narrator)';
+  showDialogue(speaker, s.t, color);
+}
+function nextStep(){
+  if(choicesBoxEl.childElementCount > 0) return;
+  if(idx < story.length-1){ idx++; renderStep(); }
+}
+function jumpTo(i){
+  idx = Math.max(0, Math.min(i, story.length - 1));
+  renderStep();
+}
+gameWorld.addEventListener('click', (e)=>{
+  if (e.target.closest('.choice-btn')) return;
+  nextStep();
+});
+
+/* ===== FABUŁA ===== */
+const story = [
+  // 1. Zejście
+  { s:'Monika', t:'Ja tam nie idę. Nie ma mowy.' },
+  { s:'Sara', t:'Zostaniesz tu sama?' },
+  { s:'…', t:'Nie czekając na odpowiedź, Sara jako pierwsza postawiła stopę nа schodach. Ruszyłem tuż za nią, a po chwili wahania dołączyła do nas drżąca Karo. Monika, ze szlochem, podążyła niechętnie za nami.' },
+  // 2. Odkrycie
+  { bg:'piwnica_cialo.jpg', s:'…', t:'W końcu stanęliśmy na wilgotnej, ziemistej podłodze. Snopy naszych latarek błądziły po ścianach, wyłapując z mroku obrazy jak z koszmaru.' },
+  { s:'…', t:'I wtedy światło mojej latarki zatrzymało się na przeciwległej ścianie. Zamarłem, a oddech uwiązł mi w gardle. Monika wydała z siebie zduszony, przeraźliwy krzyk.' },
+  { s:'…', t:'W rogu pomieszczenia, otoczone przez wypalone na ścianie dziwne symbole, wisiało ciało. Zaschnięte, nagie zmumifikowane zwłoki kobiety, dawnej dyrektorki, Marii S.' },
+  { s:'…', t:'Była przybita do ściany grubymi gwoźdźmi, a jej ciało ciasno owinięto drutem kolczastym. Twarz zastygła w niemym krzyku.' },
+  { s:'Sara', t:'Klucz…' },
+  { s:'…', t:'Spojrzałem tam, gdzie wskazywała. Przez rozdarcie w jej żebrach zaóważyłem mały, mosiężny kluczyk, wepchnięty głęboko w jej ciało. Klucz do sejfu.' },
+  { s:'…', t:'Prawda uderzyła w nas z siłą huraganu. Odpowiedź nie leżała *w* piwnicy... Była *w niej*.' },
+  { s:'Monika', t:'Nie. Kurwa, nie! Nigdy! Zapomnijcie o sejfie! Wychodzimy stąd!' },
+  { s:'…', t:'Ale Sara już rozglądała się po piwnicy. Znalazła kawałek zaostrzonego, zardzewiałego metalu. Podniosła go.' },
+  { s:'Sara', t:'Nie ma innej drogi. Wiesz o tym.' },
+  // 3. Atak
+  { s:'…', t:'Ruszyła w stronę zwłok. I wtedy... Światła naszych latarek zamigotały jednocześnie i zgasły, pogrążając nas w absolutnej ciemności.', action: flickerEffect },
+  { s:'…', t:'Usłyszeliśmy dźwięk – ciche drapanie, jakby coś sunęło po ścianach. A potem odgłos rozdzieranego mięsa i łamanych kości.'},
+  { bg:'piwnica_potwor.png', s:'…', t:'Latarki włączyły się ponownie. W najdalszym, najciemniejszym kącie piwnicy coś się poruszyło.', action: flickerEffect },
+  { s:'…', t:'Z mroku wyłoniła się zniekształcona, groteskowa istota, odrażająca parodia człowieka. Stwór z naszych koszmarów. Jego kończyny były nienaturalnie wydłużone, a palce zakończone długimi, ostrymi szponami.'},
+  { s:'…', t:'Zanim zdążyliśmy zareagować, rzuciła się na nas z wrzaskiem, który był skrzyżowaniem krzyku dziecka i ryku zwierzęcia.', action:()=>sfx('sfx-monster-scream', 0.8) },
+  // 4. Walka
+  { s:'…', t:'Stwór był nienaturalnie szybki. Poczułem uderzenie tak silne, że zwaliło mnie z nóg. Lodowate, ostre szpony przeorały moje ramię.', action:()=>sfx('sfx-monster-hit', 0.9) },
+  { s:'…', t:'Zobaczyłem, jak potwór unosi nade mną swoją szponiastą dłoń do ostatecznego ciosu. Byłem pewien, że to koniec.'},
+  { s:'…', t:'Nagle, tuż obok jego głowy, coś roztrzaskało się z hukiem. To Karo rzuciła w niego jednym z ciężkich, szklanych słojów z półki.'},
+  { s:'…', t:'Stwór cofnął się o krok, wydając z siebie wściekły, syczący dźwięk. Ten moment wystarczył.'},
+  { s:'Sara', t:'Belka! Sławek, pomóż mi!'},
+  { s:'…', t:'Sara oświetlała latarką grubą, drewnianą belkę podtrzymującą strop tuż nad potworem. Była stara, spróchniała i pęknięta.'},
+  { type:'choice', choices:[
+      { text: '[Pchnij belkę razem z Sarą]', action:()=>jumpTo(26) }
+  ]},
+  { s:'…', t:'Resztkami sił podczołgałem się do niej. Sara już napierała na nią całym ciężarem. Dołączyłem do niej.'},
+  { s:'Sara', t:'Jeszcze raz! Razem!'},
+  { s:'…', t:'Pchnęliśmy z całej siły. Z ogłuszającym trzaskiem pękającego drewna, belka runęła w dół, pociągając za sobą fragment sufitu.', action:()=>sfx('sfx-beam-break', 1.0) },
+  { s:'…', t:'Zwaliła się prosto na stwora, przygważdżając go do ziemi z potwornym, mokrym chrzęstem. Z jego unieruchomionego ciała wydobył się ostatni, wysoki, przeciągły pisk, który po chwili ucichł.' },
+  { bg:'piwnica_cialo.jpg', s:'…', t:'W piwnicy zapadła cisza. Gęsta, ciężka, przerywana tylko naszymi urywanymi oddechami i cichym szlochem Moniki dochodzącym z kąta. Żyliśmy.'},
+  // 5. Klucz
+  { s:'Sara', t:'To… jeszcze… nie koniec.'},
+  { s:'…', t:'Podeszła do zwłok dyrektorki. Monika odwróciła głowę, wciskając twarz w ścianę. Karo stała nieruchomo, ale jej oczy były zamknięte.'},
+  { type:'choice', choices:[
+      { text: '[Odwróć wzrok]', action:()=>jumpTo(34) },
+      { text: '[Świeć latarką, by jej pomóc]', action:()=>jumpTo(34) }
+  ]},
+  { s:'…', t:'Dźwięk, jaki wydał metal, wbijając się w wyschniętą skórę i tkankę, będzie mnie prześladował do końca życia.', action:()=>sfx('sfx-flesh', 0.8) },
+  { s:'…', t:'Sara pracowała w milczeniu, jej twarz była skupiona. Po chwili, która zdawała się trwać wieczność, cofnęła się.'},
+  { s:'…', t:'W jej wyciągniętej, brudnej od krwi i pyłu dłoni, leżał mały, mosiężny kluczyk. Mieliśmy go.'},
+  { s:'Sara', t:'Wychodzimy. Już.'},
+  { bg:'drzwi_piwnicy.png', s:'…', t:'Uciekliśmy z tej krypty. Gdy znaleźliśmy się na górze, zatrzasnęliśmy ciężkie, metalowe drzwi, a dźwięk zamykanego zamka był najpiękniejszą muzyką, jaką kiedykolwiek słyszałem.', action:()=>{sfx('sfx-door-slam', 0.7); setTimeout(()=>sfx('sfx-unlock', 0.8), 500);}},
+  { end:true }
+];
+
+renderStep();
+</script>
+</body>
+</html>

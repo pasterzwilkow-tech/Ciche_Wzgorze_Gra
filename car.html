@@ -1,0 +1,356 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Ciche Wzgórze — Poranek (VN)</title>
+<link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg-color: #000;
+    --text-color: #e2e8f0;
+    --border-color: #44403c;
+    --panel-bg: rgba(12, 10, 9, 0.9);
+    --choice-bg: rgba(41, 37, 36, 0.8);
+    --choice-hover-bg: #c7a26d;
+    --name-narrator: #c7a26d;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { height:100%; margin:0; font-family:'Lora', serif; background:#000; color:var(--text-color); overflow:hidden; }
+
+  /* Warstwy */
+  #game-world { position:relative; width:100%; height:100%; background-color:#000; }
+  .layer { position:absolute; inset:0; background-size:cover; background-position:center; transition: opacity 1.5s ease-in-out, background-image 1s ease-in-out; }
+  #background-layer { background-image:url('images/pokoj_ciemny.png'); }
+
+  /* UI */
+  #ui-layer { display:flex; flex-direction:column; justify-content:flex-end; align-items:center; padding:20px; }
+  #text-box { width:100%; max-width:900px; min-height:180px; background:var(--panel-bg); border:1px solid var(--border-color); border-radius:8px; padding:25px 30px; backdrop-filter: blur(3px); margin-bottom:20px; }
+  #speaker-name { font-weight:bold; font-size:1.2em; display:block; margin-bottom:12px; color:var(--name-narrator); }
+  #dialogue-text { line-height:1.8; font-size:1.15em; }
+  #choices-box { width:100%; max-width:900px; display:flex; flex-direction:column; gap:10px; }
+  .choice-btn { background:var(--choice-bg); border:1px solid var(--border-color); color:var(--text-color); font-family:'Lora', serif; font-size:1.05em; padding:14px 18px; text-align:left; cursor:pointer; border-radius:6px; transition:all .2s; opacity:0; transform:translateY(10px); animation:slideUp .5s forwards; }
+  .choice-btn:hover{ background:var(--choice-hover-bg); color:#000; border-color:var(--choice-hover-bg); }
+  @keyframes slideUp { to { opacity:1; transform:translateY(0); } }
+  
+  /* Usunięto #final-choice */
+
+  /* Overlay (dla minigry w iframe) */
+  .overlay { position:fixed; inset:0; z-index:100; display:none; align-items:center; justify-content:center; background:rgba(0,0,0,.85); }
+  .overlay.visible { display:flex; }
+  .document {
+    width: min(90vw, 760px);
+    height: min(80vh, 640px);
+    background: #fdfaf4;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    box-shadow: 0 0 30px black;
+    overflow: hidden;
+    padding: 0;
+  }
+  .overlay-close-btn {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    z-index: 101;
+    background: #111;
+    color: #eee;
+    border: 1px solid #555;
+    border-radius: 50%;
+    width: 35px;
+    height: 35px;
+    cursor: pointer;
+    font-size: 1.5em;
+    line-height: 33px;
+    text-align: center;
+    transition: all 0.2s;
+  }
+  .overlay-close-btn:hover {
+    background: var(--choice-hover-bg);
+    color: #000;
+    transform: rotate(90deg);
+  }
+
+  /* Pasek tytułu */
+  #title-ribbon { position:absolute; top:14px; left:50%; transform:translateX(-50%); background:rgba(0,0,0,.55); border:1px solid rgba(255,255,255,.08); padding:6px 12px; border-radius:8px; font-size:.95em; letter-spacing:.03em; color:#cbd5e1; }
+</style>
+</head>
+<body>
+  <div id="game-world">
+    <div id="background-layer" class="layer"></div>
+
+    <div id="ui-layer" class="layer">
+      <div id="title-ribbon">Ciche Wzgórze — Poranek</div>
+      <div id="text-box">
+        <span id="speaker-name">...</span>
+        <p id="dialogue-text"></p>
+      </div>
+      <div id="choices-box"></div>
+      </div>
+
+    <div id="flyer-overlay" class="overlay">
+      <div class="document">
+        <iframe id="flyer-frame" src="about:blank" style="width: 100%; height: 100%; border: none;"></iframe>
+      </div>
+      <button class="overlay-close-btn" onclick="hideOverlay('flyer-overlay')">&times;</button>
+    </div>
+  </div>
+
+  <audio id="sfx-door"><source src="audio/close-door-382723.mp3"></audio>
+  <audio id="music" loop><source src="audio/horror1.mp3" type="audio/mpeg"></audio>
+
+<script>
+  const dialogueTextEl = document.getElementById('dialogue-text');
+  const speakerEl = document.getElementById('speaker-name');
+  const choicesBoxEl = document.getElementById('choices-box');
+  const backgroundLayer = document.getElementById('background-layer');
+  // Usunięto referencję do finalChoice
+  const sfx = { door: document.getElementById('sfx-door') };
+
+  function setBg(name){ backgroundLayer.style.backgroundImage = `url('images/${name}')`; }
+  function showText(html){ speakerEl.textContent = '...'; dialogueTextEl.innerHTML = html; }
+
+  function showChoices(choices){
+    window._lastChoices = choices.slice();
+    choicesBoxEl.innerHTML = '';
+    choices.forEach((c, i) => {
+      if (c.condition && !c.condition()) return;
+      const b = document.createElement('button');
+      b.className = 'choice-btn';
+      b.textContent = c.text;
+      b.style.animationDelay = `${i * 100}ms`;
+      b.onclick = () => {
+        if (!c.noClear) { choicesBoxEl.innerHTML = ''; }
+        c.action();
+      };
+      choicesBoxEl.appendChild(b);
+    });
+  }
+
+  function showOverlay(id){
+    const el = document.getElementById(id);
+    if(!el) return;
+    el.classList.add('visible');
+    if (id === 'flyer-overlay') {
+      document.getElementById('flyer-frame').src = 'ulotka.html';
+    }
+  }
+
+  function hideOverlay(id){
+    const el = document.getElementById(id);
+    if (el) {
+      el.classList.remove('visible');
+      if (id === 'flyer-overlay') {
+        document.getElementById('flyer-frame').src = 'about:blank';
+      }
+    }
+    if (!choicesBoxEl.childElementCount && Array.isArray(window._lastChoices)) {
+      showChoices(window._lastChoices);
+    }
+  }
+
+  function hideAllOverlays(){ ['flyer-overlay'].forEach(hideOverlay); }
+  document.addEventListener('click', (e)=>{
+    const ov = document.getElementById('flyer-overlay');
+    if (ov.classList.contains('visible') && e.target === ov) { hideAllOverlays(); }
+  });
+  document.addEventListener('keydown', (e)=>{ if(e.key === 'Escape'){ hideAllOverlays(); } });
+
+  const G = {
+    washed:false,
+    dressed:false,
+    boardSeen:false,
+    boardRead:{remont:false,liczniki:false,sekta:false},
+    neighbor:{met:false,askedWeird:false,askedSaw:false,extraGiven:false,rolled:false},
+    heardOnce:false
+  };
+
+  const scenes = {
+    start:()=>{
+      setBg('pokoj_ciemny.png');
+      showText('Budzi cię blade światło wpadające przez szczelinę w zasłonie. Leżysz w swoim łóżku, wciąż czując ciężar nocnego koszmaru. W twojej dłoni tkwi zgnieciona koperta z listem. Nie wszystko było snem.');
+      showChoices([
+        {text:'Rozejrzyj się',action:scenes.lookAround},
+        {text:'Umyj się',action:scenes.wash,condition:()=>!G.washed},
+        {text:'Ubierz się',action:scenes.dress,condition:()=>!G.dressed},
+        {text:'Wyjdź z mieszkania',action:scenes.leaveHome}
+      ]);
+    },
+    lookAround:()=>{
+      setBg('pokoj_jasny.png');
+      showText('Pokój wygląda identycznie jak wczoraj. Budzik zatrzymał się na 3:03.');
+      showChoices([
+        {text:'Umyj się',action:scenes.wash,condition:()=>!G.washed},
+        {text:'Ubierz się',action:scenes.dress,condition:()=>!G.dressed},
+        {text:'Wyjdź z mieszkania',action:scenes.leaveHome}
+      ]);
+    },
+    wash:()=>{
+      showText('Zimna woda stawia cię na nogi. Oddychasz spokojniej, jakby część ciężaru odpłynęła razem z kroplami.');
+      G.washed=true;
+      showChoices([
+        {text:'Ubierz się',action:scenes.dress,condition:()=>!G.dressed},
+        {text:'Wyjdź z mieszkania',action:scenes.leaveHome}
+      ]);
+    },
+    dress:()=>{
+      showText('Przebierasz się w wczorajsze ubrania. Kurtka, portfel, klucze. Jesteś gotów.');
+      G.dressed=true;
+      showChoices([{text:'Wyjdź z mieszkania',action:scenes.leaveHome}]);
+    },
+    leaveHome:()=>{
+      if(!G.dressed){
+        showText('Jeszcze się przebierz, zanim wyjdziesz.');
+        showChoices([{text:'Ubierz się',action:scenes.dress}]);
+        return;
+      }
+      sfx.door.play();
+      scenes.hall();
+    },
+    hall:()=>{
+      setBg('klatka.png');
+      showText('Zatrzaskujesz za sobą drzwi. Klatka wygląda normalnie. Podłoga lśni, ktoś sprzątał. W powietrzu czuć wilgoć i chemię.');
+      showChoices([
+        {text:'Rozejrzyj się',action:scenes.hallLook},
+        {text:'Nasłuchuj',action:scenes.listen},
+        {text:'Sprawdź tablicę',action:scenes.board},
+        {text:'Zapukaj do 3',action:scenes.neighbor},
+        {text:'Zejdź na dół',action:scenes.downstairs}
+      ]);
+    },
+    hallLook:()=>{
+      showText('Stoisz na półpiętrze. W rogach zebrały się stare, ciemne plamy. Po lewej widzisz tablicę ogłoszeń, obok drzwi do mieszkania nr 3. Niżej widać matowe szkło drzwi wejściowych.');
+      showChoices([
+        {text:'Sprawdź tablicę',action:scenes.board},
+        {text:'Zapukaj do 3',action:scenes.neighbor},
+        {text:'Zejdź na dół',action:scenes.downstairs}
+      ]);
+    },
+    listen:()=>{
+      showText(G.heardOnce ? 'Nic niezwykłego. Miasto budzi się do życia.' : 'Wstrzymujesz oddech. Sprzed kamienicy dobiega stłumiony stukot, jakby ktoś przestawił wiadro.');
+      G.heardOnce=true;
+      showChoices([
+        {text:'Sprawdź tablicę',action:scenes.board},
+        {text:'Zapukaj do 3',action:scenes.neighbor},
+        {text:'Zejdź na dół',action:scenes.downstairs}
+      ]);
+    },
+    board:()=>{
+      showText(G.boardSeen ? 'Na tablicy: remont windy, wymiana liczników i dziwna ulotka z narysowanym okiem w trójkącie.' : 'Podchodzisz do tablicy. Dostrzegaż trzy kartki przybite pinezkami kołyszą się od przeciągu.');
+      G.boardSeen=true;
+      const opts=[];
+      if(!G.boardRead.remont) opts.push({text:'Czytaj: Remont windy',action:scenes.readRemont});
+      if(!G.boardRead.liczniki) opts.push({text:'Czytaj: Wymiana liczników',action:scenes.readLiczniki});
+      if(!G.boardRead.sekta) opts.push({text:'Czytaj: Ulotka (sekta)',action:scenes.readSect});
+      if(G.boardRead.sekta) opts.push({text:'Otwórz ulotkę', noClear:true, action:()=>showOverlay('flyer-overlay')});
+      opts.push({text:'Wróć',action:scenes.hall});
+      showChoices(opts);
+    },
+    readRemont:()=>{
+      showText('„REMONT WINDY — Od 14 do 20 bieżącego miesiąca winda wyłączona z użytku. Prosimy nie blokować drzwi szybów.”');
+      G.boardRead.remont=true;
+      showChoices([
+        {text:'Czytaj: Wymiana liczników',action:scenes.readLiczniki,condition:()=>!G.boardRead.liczniki},
+        {text:'Czytaj: Ulotka (sekta)',action:scenes.readSect,condition:()=>!G.boardRead.sekta},
+        {text:'Otwórz ulotkę', noClear:true, action:()=>showOverlay('flyer-overlay'), condition:()=>G.boardRead.sekta},
+        {text:'Wróć',action:scenes.board}
+      ]);
+    },
+    readLiczniki:()=>{
+      showText('„WYMIANA LICZNIKÓW — W dniach 21–23 od godz. 8:00 technicy dokonają odczytu i wymiany wodomierzy. Prosimy udostępnić mieszkania.”');
+      G.boardRead.liczniki=true;
+      showChoices([
+        {text:'Czytaj: Remont windy',action:scenes.readRemont,condition:()=>!G.boardRead.remont},
+        {text:'Czytaj: Ulotka (sekta)',action:scenes.readSect,condition:()=>!G.boardRead.sekta},
+        {text:'Otwórz ulotkę', noClear:true, action:()=>showOverlay('flyer-overlay'), condition:()=>G.boardRead.sekta},
+        {text:'Wróć',action:scenes.board}
+      ]);
+    },
+    readSect:()=>{
+      showText('„ŚWIAT SIĘ KOŃCY – TYLKO WYBRANI PRZETRWAJĄ”. Symbol oka w trójkącie. Na dole dopisek o „pełzającym chaosie”…');
+      G.boardRead.sekta=true;
+      showChoices([
+        {text:'Otwórz ulotkę', noClear:true, action:()=>showOverlay('flyer-overlay')},
+        {text:'Wróć',action:scenes.board}
+      ]);
+    },
+    neighbor:()=>{
+      const N=G.neighbor;
+      if(!N.met){
+        showText('Pukasz do drzwi „3”. Łańcuch po drugiej stronie napina się. „Kto tam?”');
+        N.met=true;
+        showChoices([
+          {text:'Czy działo się coś niezwykłego?',action:()=>scenes.neighAsk('weird')},
+          {text:'Co pan widział?',action:()=>scenes.neighAsk('saw')},
+          {text:'Do widzenia',action:scenes.hall}
+        ]);
+      } else {
+        showText('Za drzwiami krótkie: „Szybko. Nie mam czasu.”');
+        showChoices([
+          {text:'Czy działo się coś niezwykłego?',action:()=>scenes.neighAsk('weird'),condition:()=>!N.askedWeird},
+          {text:'Co pan widział?',action:()=>scenes.neighAsk('saw'),condition:()=>!N.askedSaw},
+          {text:'Przekonaj go',action:scenes.neighPersuade,condition:()=>N.askedWeird&&N.askedSaw&&!N.rolled},
+          {text:'Do widzenia',action:scenes.hall}
+        ]);
+      }
+    },
+    neighAsk:(kind)=>{
+      const N=G.neighbor;
+      if(kind==='weird'){
+        showText('„Nic nie widziałem.” — ton chłodny. „Tylko jakiś chuligan przewrócił kosz na dole. Sprzątaczka rano przyszła i sprzątała klatkę.”');
+        N.askedWeird=true;
+      } else {
+        showText('„Powiedziałem: nic. Kosz przewrócony, papier się walał, sprzątaczka ogarnęła. I tyle.”');
+        N.askedSaw=true;
+      }
+      showChoices([
+        {text:'Czy działo się coś niezwykłego?',action:()=>scenes.neighAsk('weird'),condition:()=>!N.askedWeird},
+        {text:'Co pan widział?',action:()=>scenes.neighAsk('saw'),condition:()=>!N.askedSaw},
+        {text:'Przekonaj go',action:scenes.neighPersuade,condition:()=>N.askedWeird&&N.askedSaw&&!N.rolled},
+        {text:'Do widzenia',action:scenes.hall}
+      ]);
+    },
+    neighPersuade:()=>{
+      const N=G.neighbor; N.rolled=true;
+      const r=Math.floor(Math.random()*6)+1; // k6
+      if(r<=3){
+        showText('„Nie będę o tym gadał. Proszę nie dzwonić po ludziach.” Łańcuch brzęczy. Drzwi zamykają się z hukiem.');
+        showChoices([{text:'Wróć',action:scenes.hall}]);
+      } else {
+        N.extraGiven=true;
+        showText('Chwila milczenia. Potem: „Dobrze. Ale to między nami.” „Ktoś się kręcił w nocy na dole. Długi płaszcz, nie widziałem twarzy. Sprzątaczka z nim gadała. Krótko, ale rozmawiali.”');
+        showChoices([{text:'Wróć',action:scenes.hall}]);
+      }
+    },
+    // --- ZMIANA: Ta funkcja teraz automatycznie przechodzi dalej ---
+    downstairs:()=>{
+      setBg('ulica.png');
+      showText('Schodzisz na dół. Z matowego szkła drzwi sączy się mleczne światło. Czas ruszyć dalej.');
+      choicesBoxEl.innerHTML = ''; // Czyścimy wybory, aby uniemożliwić interakcję
+      // Automatyczne przejście po 3 sekundach
+      setTimeout(() => {
+        window.location.href = 'station.html';
+      }, 3000);
+    }
+  };
+
+  function startMusicOnce(){
+    const m=document.getElementById('music');
+    if(!m||startMusicOnce._s) return;
+    startMusicOnce._s=true;
+    try{ m.volume=0.6; m.play(); }catch(e){}
+  }
+  document.addEventListener('click', startMusicOnce, { once:true });
+
+  
+  window.addEventListener('message', (e) => {
+    if (e && e.data === 'closeUlotkaMinigame') {
+      try { hideOverlay('flyer-overlay'); } catch (err) {}
+    }
+  });
+
+  scenes.start();
+</script>
+</body>
+</html>
